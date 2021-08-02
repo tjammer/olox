@@ -1,0 +1,4 @@
+(library
+ (name olox)
+  (preprocess (pps ppx_deriving.show ppx_deriving.eq))
+ (libraries containers))
