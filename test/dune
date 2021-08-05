@@ -1,3 +1,2 @@
 (test
- (name olox_test)
- (libraries alcotest olox))
+ (name olox_test))
