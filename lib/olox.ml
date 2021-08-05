@@ -50,35 +50,33 @@ end
 let report line where message =
   Format.eprintf "[line %i] Error%s: %s" line where message
 
-let rec collect lexbuf lst = function
-  | Parser.Eof -> List.rev lst
-  | other -> collect lexbuf (other :: lst) (Lexer.read lexbuf)
-
-let print_position outx lexbuf =
+let print_position _ lexbuf =
   let pos = lexbuf.lex_curr_p in
-  Printf.fprintf outx "%s:%d:%d" pos.pos_fname pos.pos_lnum
+  Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum
     (pos.pos_cnum - pos.pos_bol + 1)
 
 let parse_with_error lexbuf =
-  try Parser.prog Lexer.read lexbuf
-  with Lexer.SyntaxError msg ->
-    Printf.fprintf stderr "%a: %s\n" print_position lexbuf msg;
-    failwith "Could not lex"
+  try Ok (Parser.prog Lexer.read lexbuf) with
+  | Lexer.SyntaxError msg ->
+      Error (Printf.sprintf "%a: %s\n" print_position lexbuf msg)
+  | Parser.Error ->
+      Error (Printf.sprintf "%a: syntax error\n" print_position lexbuf)
 
 let run src =
   let lexbuf = Lexing.from_string src in
-  parse_with_error lexbuf |> Ast.string_of_expr |> print_endline;
-  Ok ()
+  match parse_with_error lexbuf with
+  | Ok expr -> (
+      try Interpreter.interpret expr |> Ast.show_literal |> print_endline
+      with Interpreter.TypeError err -> print_endline err)
+  | Error message -> prerr_string message
 
 let run_file filename =
   let content = CCIO.(with_in filename read_all) in
-  match run content with
-  | Ok _ -> ()
-  | Error (line, message) -> report line "" message
+  run content
 
 let rec run_prompt () =
   try
     print_string "> ";
-    ignore @@ run (read_line ());
+    run (read_line ());
     run_prompt ()
   with End_of_file -> ()

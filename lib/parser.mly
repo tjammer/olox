@@ -42,14 +42,13 @@
 %token While
 %token Eof
 
-/* %left Less_equal */
-/* %left Greater_equal */
-/* %left Plus */
-/* %left Star */
-%left Less_equal
-%left Less
-%left Greater
+%nonassoc Equal_equal
+%nonassoc Less_equal
+%nonassoc Less
+%nonassoc Greater
 %left Plus
+%left Star
+
 %nonassoc Minus
 %nonassoc Bang
 %nonassoc Number
