@@ -66,8 +66,10 @@ let run src =
   let lexbuf = Lexing.from_string src in
   match parse_with_error lexbuf with
   | Ok expr -> (
-      try Interpreter.interpret expr |> Ast.show_literal |> print_endline
-      with Interpreter.TypeError err -> print_endline err)
+      try ignore (Interpreter.interpret expr)
+      with Interpreter.RuntimeError err ->
+        print_string "RuntimeError: ";
+        print_endline err)
   | Error message -> prerr_string message
 
 let run_file filename =

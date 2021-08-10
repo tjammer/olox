@@ -30,6 +30,8 @@ rule read =
   | "false"  { False }
   | "null"   { Nil }
   | "and"    { And }
+  | "print"  { Print }
+  | "var"    { Var }
   | id       { Identifier (Lexing.lexeme lexbuf) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
   | '('      { Left_paren }
@@ -51,6 +53,7 @@ rule read =
   | '>'      { Greater }
   | "<="     { Less_equal }
   | ">="     { Greater_equal }
+  | "//"     { line_comment lexbuf }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof      { Eof }
 
@@ -70,3 +73,9 @@ and read_string buf =
     }
   | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("String is not terminated")) }
+
+and line_comment =
+  parse
+  | newline { next_line lexbuf; read lexbuf }
+  | eof     { Eof }
+  | _       { line_comment lexbuf }

@@ -26,6 +26,10 @@ type expr =
   | Binary of { left : expr; op : binop; right : expr }
   | Grouping of expr
 
+type statement = Expr of expr | Print of expr
+
+type decl = Var_decl of string * expr | Stmt of statement
+
 let parenthesize str = "(" ^ String.concat " " str ^ ")"
 
 let rec show_expr = function

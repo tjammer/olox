@@ -53,11 +53,19 @@
 %nonassoc Bang
 %nonassoc Number
 
-%start <Ast.expr> prog
+%start <Ast.decl list> prog
 
 %%
 
-prog: e = expr; Eof { e }
+prog: s = list(decl); Eof { s }
+
+decl:
+  | Var; id = Identifier; Equal; e = expr; Semicolon { Var_decl (id, e) }
+  | s = stmt { Stmt s }
+
+stmt:
+  | e = expr; Semicolon { Expr e }
+  | Print; e = expr; Semicolon { Print e }
 
 expr:
   | num = Number { Literal (Number num) }

@@ -1,22 +1,27 @@
 open Ast
+module Environment = Map.Make (String)
 
-exception TypeError of string
+exception RuntimeError of string
 
-let rec interpret = function
+let rec interpret_expr env = function
+  | Literal (Identifier id) -> (
+      match Environment.find_opt id env with
+      | Some l -> l
+      | None -> raise (RuntimeError ("Cannot find variable '" ^ id ^ "'")))
   | Literal l -> l
-  | Unary { op; expr } -> interpret_unop op expr
-  | Binary { left; op; right } -> interpret_binop op left right
-  | Grouping e -> interpret e
+  | Unary { op; expr } -> interpret_unop env op expr
+  | Binary { left; op; right } -> interpret_binop env op left right
+  | Grouping e -> interpret_expr env e
 
-and interpret_unop op expr =
-  match (op, interpret expr) with
+and interpret_unop env op expr =
+  match (op, interpret_expr env expr) with
   | Not, Bool b -> Bool (not b)
   | Neg, Number n -> Number (Float.neg n)
-  | Not, _ -> raise (TypeError "'!' must be followed by bool")
-  | Neg, _ -> raise (TypeError "Unary '-' must be followed by a number")
+  | Not, _ -> raise (RuntimeError "'!' must be followed by bool")
+  | Neg, _ -> raise (RuntimeError "Unary '-' must be followed by a number")
 
-and interpret_binop op left right =
-  match (op, interpret left, interpret right) with
+and interpret_binop env op left right =
+  match (op, interpret_expr env left, interpret_expr env right) with
   | Less, Number left, Number right -> Bool (left < right)
   | Less_equal, Number left, Number right -> Bool (left <= right)
   | Greater, Number left, Number right -> Bool (left > right)
@@ -29,11 +34,11 @@ and interpret_binop op left right =
   | Plus, String left, String right -> String (left ^ right)
   | _, _, _ ->
       raise
-        (TypeError
+        (RuntimeError
            ("Cannot use binary op " ^ show_binop op ^ " with expr "
-           ^ show_literal (interpret left)
+           ^ show_literal (interpret_expr env left)
            ^ " and "
-           ^ show_literal (interpret right)))
+           ^ show_literal (interpret_expr env right)))
 
 and interpret_equal left right =
   match (left, right) with
@@ -43,6 +48,21 @@ and interpret_equal left right =
   | Nil, Nil -> Bool true
   | _ ->
       raise
-        (TypeError
+        (RuntimeError
            ("Cannot check equality betwenn " ^ show_literal left ^ " and "
           ^ show_literal right))
+
+let interpret_stmt env = function
+  | Expr e ->
+      ignore (interpret_expr env e);
+      env
+  | Print e ->
+      print_endline (interpret_expr env e |> show_literal);
+      env
+
+let interpret_decl env = function
+  | Var_decl (id, expr) -> Environment.add id (interpret_expr env expr) env
+  | Stmt s -> interpret_stmt env s
+
+let interpret =
+  List.fold_left (fun env decl -> interpret_decl env decl) Environment.empty

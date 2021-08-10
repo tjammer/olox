@@ -1,14 +1,19 @@
 (library
  (name olox)
-  (preprocess (pps ppx_deriving.show ppx_deriving.eq))
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq))
  (libraries containers))
 
 (rule
  (targets parser.mli parser.ml)
-  (deps   parser.mly)
-  (action (ignore-stderr (run menhir --explain parser.mly))))
+ (deps parser.mly)
+ (action
+  (ignore-stderr
+   (run menhir --explain parser.mly))))
 
 (rule
  (targets lexer.ml)
-  (deps   lexer.mll)
-  (action (ignore-stderr (run ocamllex lexer.mll))))
+ (deps lexer.mll)
+ (action
+  (ignore-stderr
+   (run ocamllex lexer.mll))))
