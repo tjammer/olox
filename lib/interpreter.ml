@@ -4,14 +4,25 @@ module Environment = Map.Make (String)
 exception RuntimeError of string
 
 let rec interpret_expr env = function
+  (* Since olox is in imperative language, an expression can update the env
+   * as a side effect. We use a ref for that *)
   | Literal (Identifier id) -> (
-      match Environment.find_opt id env with
+      match Environment.find_opt id !env with
       | Some l -> l
       | None -> raise (RuntimeError ("Cannot find variable '" ^ id ^ "'")))
   | Literal l -> l
   | Unary { op; expr } -> interpret_unop env op expr
   | Binary { left; op; right } -> interpret_binop env op left right
   | Grouping e -> interpret_expr env e
+  | Assign (id, expr) -> (
+      match Environment.find_opt id !env with
+      | Some _ ->
+          let value = interpret_expr env expr in
+          env := Environment.add id value !env;
+          value
+      | None ->
+          raise (RuntimeError ("Assignment target '" ^ id ^ "' does not exist"))
+      )
 
 and interpret_unop env op expr =
   match (op, interpret_expr env expr) with
@@ -52,16 +63,25 @@ and interpret_equal left right =
            ("Cannot check equality betwenn " ^ show_literal left ^ " and "
           ^ show_literal right))
 
-let interpret_stmt env = function
+let rec interpret_stmt env = function
   | Expr e ->
+      let env = ref env in
       ignore (interpret_expr env e);
-      env
+      !env
   | Print e ->
+      let env = ref env in
       print_endline (interpret_expr env e |> show_literal);
-      env
+      !env
+  | Block decls ->
+      let old_env = env in
+      ignore
+        (List.fold_left (fun env decl -> interpret_decl env decl) env decls);
+      old_env
 
-let interpret_decl env = function
-  | Var_decl (id, expr) -> Environment.add id (interpret_expr env expr) env
+and interpret_decl env = function
+  | Var_decl (id, expr) ->
+      let env = ref env in
+      Environment.add id (interpret_expr env expr) !env
   | Stmt s -> interpret_stmt env s
 
 let interpret =

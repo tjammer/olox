@@ -42,6 +42,7 @@
 %token While
 %token Eof
 
+%left Equal
 %nonassoc Equal_equal
 %nonassoc Less_equal
 %nonassoc Less
@@ -57,7 +58,7 @@
 
 %%
 
-prog: s = list(decl); Eof { s }
+prog: decls = list(decl); Eof { decls }
 
 decl:
   | Var; id = Identifier; Equal; e = expr; Semicolon { Var_decl (id, e) }
@@ -66,6 +67,7 @@ decl:
 stmt:
   | e = expr; Semicolon { Expr e }
   | Print; e = expr; Semicolon { Print e }
+  | Left_brace; decls = list(decl); Right_brace { Block decls }
 
 expr:
   | num = Number { Literal (Number num) }
@@ -86,4 +88,5 @@ expr:
   | left = expr; Slash; right = expr { Binary { left ; op = Slash ; right } }
   | left = expr; Equal_equal; right = expr { Binary { left ; op = Equal_equal ; right } }
   | Left_paren; e = expr; Right_paren { Grouping e }
+  | lval = expr; Equal; e = expr { Assign (make_lvalue lval, e) }
 ;

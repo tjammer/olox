@@ -25,10 +25,11 @@ type expr =
   | Unary of { op : unop; expr : expr }
   | Binary of { left : expr; op : binop; right : expr }
   | Grouping of expr
+  | Assign of string * expr
 
-type statement = Expr of expr | Print of expr
+type statement = Expr of expr | Print of expr | Block of decl list
 
-type decl = Var_decl of string * expr | Stmt of statement
+and decl = Var_decl of string * expr | Stmt of statement
 
 let parenthesize str = "(" ^ String.concat " " str ^ ")"
 
@@ -38,3 +39,8 @@ let rec show_expr = function
   | Binary { left; op; right } ->
       parenthesize [ show_binop op; show_expr left; show_expr right ]
   | Grouping expr -> parenthesize [ "group"; show_expr expr ]
+  | Assign (id, expr) -> parenthesize [ "assign"; id; show_expr expr ]
+
+exception Error
+
+let make_lvalue = function Literal (Identifier id) -> id | _ -> raise Error
