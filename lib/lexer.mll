@@ -32,6 +32,11 @@ rule read =
   | "and"    { And }
   | "print"  { Print }
   | "var"    { Var }
+  | "if"     { If }
+  | "else"   { Else }
+  | "and"    { And }
+  | "or"     { Or }
+  | "while"  { While }
   | id       { Identifier (Lexing.lexeme lexbuf) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
   | '('      { Left_paren }

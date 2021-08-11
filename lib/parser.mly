@@ -43,6 +43,8 @@
 %token Eof
 
 %left Equal
+%left Or
+%left And
 %nonassoc Equal_equal
 %nonassoc Less_equal
 %nonassoc Less
@@ -68,6 +70,12 @@ stmt:
   | e = expr; Semicolon { Expr e }
   | Print; e = expr; Semicolon { Print e }
   | Left_brace; decls = list(decl); Right_brace { Block decls }
+  | If; Left_paren; e = expr; Right_paren; thn = stmt; els = else_opt { If (e, thn, els) }
+  | While; Left_paren; e = expr; Right_paren; s = stmt { While (e, s) }
+
+else_opt:
+  | Else; s = stmt { Some s }
+  |                { None }
 
 expr:
   | num = Number { Literal (Number num) }
@@ -89,4 +97,6 @@ expr:
   | left = expr; Equal_equal; right = expr { Binary { left ; op = Equal_equal ; right } }
   | Left_paren; e = expr; Right_paren { Grouping e }
   | lval = expr; Equal; e = expr { Assign (make_lvalue lval, e) }
+  | left = expr; And; right = expr { Logical (And, left, right)}
+  | left = expr; Or; right = expr { Logical (Or, left, right)}
 ;
