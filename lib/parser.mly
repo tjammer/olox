@@ -63,8 +63,12 @@
 prog: decls = list(decl); Eof { decls }
 
 decl:
-  | Var; id = Identifier; Equal; e = expr; Semicolon { Var_decl (id, e) }
+  | var = var_decl { var }
   | s = stmt { Stmt s }
+
+var_decl:
+  | Var; id = Identifier; Equal; e = expr; Semicolon { Var_decl (id, Some e) }
+  | Var; id = Identifier; Semicolon { Var_decl (id, None) }
 
 stmt:
   | e = expr; Semicolon { Expr e }
@@ -72,10 +76,16 @@ stmt:
   | Left_brace; decls = list(decl); Right_brace { Block decls }
   | If; Left_paren; e = expr; Right_paren; thn = stmt; els = else_opt { If (e, thn, els) }
   | While; Left_paren; e = expr; Right_paren; s = stmt { While (e, s) }
+  | for_ = for_loop { for_ }
 
 else_opt:
   | Else; s = stmt { Some s }
   |                { None }
+
+/* We desugar to a while loop */
+for_loop:
+  | For; Left_paren; init = var_decl; cond = expr; Semicolon; incr = expr; Right_paren; s = stmt
+    { Block [init; Stmt (While (cond, Block [ Stmt s; Stmt (Expr incr) ]))]}
 
 expr:
   | num = Number { Literal (Number num) }

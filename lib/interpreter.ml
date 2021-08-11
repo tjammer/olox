@@ -143,7 +143,10 @@ and interpret_while expr stmt =
 
 and interpret_decl = function
   | Var_decl (id, expr) ->
-      envi := Environment.add ~id (interpret_expr expr) !envi
+      let expr =
+        match expr with Some expr -> interpret_expr expr | None -> Nil
+      in
+      envi := Environment.add ~id expr !envi
   | Stmt s -> ignore (interpret_stmt s)
 
 let interpret = List.iter interpret_decl

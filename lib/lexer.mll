@@ -37,6 +37,7 @@ rule read =
   | "and"    { And }
   | "or"     { Or }
   | "while"  { While }
+  | "for"    { For }
   | id       { Identifier (Lexing.lexeme lexbuf) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
   | '('      { Left_paren }

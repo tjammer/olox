@@ -37,7 +37,7 @@ type statement =
   | If of expr * statement * statement option
   | While of expr * statement
 
-and decl = Var_decl of string * expr | Stmt of statement
+and decl = Var_decl of string * expr option | Stmt of statement
 
 let parenthesize str = "(" ^ String.concat " " str ^ ")"
 
