@@ -7,6 +7,17 @@ module Environment = struct
 
   type t = literal StrMap.t list
 
+  let globals : t =
+    let clock params =
+      (* We need to check the arity ourselven *)
+      match params with
+      | [] ->
+          let t = Mtime_clock.elapsed () in
+          Number (Mtime.Span.to_ms t)
+      | _ -> raise (RuntimeError "Wrong arity: Expected 0 arguments")
+    in
+    [ StrMap.add "clock" (Fun clock) StrMap.empty ]
+
   let empty : t = [ StrMap.empty ]
 
   let add ~id value = function
@@ -46,24 +57,27 @@ module Environment = struct
     | _ :: env -> env
 end
 
-let envi = ref Environment.empty
+let envi = ref Environment.globals
 
 let rec interpret_expr = function
   (* Since olox is in imperative language, an expression can update the env
    * as a side effect. We use a ref for that *)
-  | Literal (Identifier id) -> (
+  | Primary (Literal (Identifier id)) -> (
       match Environment.find ~id !envi with
       | Some l -> l
       | None -> raise (RuntimeError ("Cannot find variable '" ^ id ^ "'")))
-  | Literal l -> l
+  | Primary (Literal l) -> l
   | Unary { op; expr } -> interpret_unop op expr
   | Binary { left; op; right } -> interpret_binop op left right
-  | Grouping e -> interpret_expr e
+  | Primary (Grouping e) -> interpret_expr e
   | Assign (id, expr) ->
       let value = interpret_expr expr in
       envi := Environment.replace ~id value !envi;
       value
   | Logical (op, left, right) -> interpret_logicalop op left right
+  | Call (func, arguments) ->
+      (* TODO set global environment *)
+      interpret_call func arguments
 
 and interpret_logicalop op left right =
   match (interpret_expr left, interpret_expr right) with
@@ -108,8 +122,17 @@ and interpret_equal left right =
   | _ ->
       raise
         (RuntimeError
-           ("Cannot check equality betwenn " ^ show_literal left ^ " and "
+           ("Cannot check equality between " ^ show_literal left ^ " and "
           ^ show_literal right))
+
+and interpret_call func args =
+  match interpret_expr (Primary func) with
+  | Fun func ->
+      (* Arity check happens in the closure *)
+      func args
+  | l ->
+      raise
+        (RuntimeError ("Cannot call " ^ show_literal l ^ ". Not a function"))
 
 let rec interpret_stmt = function
   | Expr e -> ignore (interpret_expr e)
@@ -148,5 +171,31 @@ and interpret_decl = function
       in
       envi := Environment.add ~id expr !envi
   | Stmt s -> ignore (interpret_stmt s)
+  | Fun_decl { name; parameters; body } ->
+      interpret_fun_decl name parameters body
+
+and interpret_fun_decl name params body =
+  let func arguments =
+    (* We create a new block with the parameter bindings *)
+    envi := Environment.open_block !envi;
+
+    (try
+       List.iter2
+         (fun id argument ->
+           envi := Environment.add ~id (interpret_expr argument) !envi)
+         params arguments
+     with Invalid_argument _ ->
+       raise
+         (RuntimeError
+            ("Wrong arity: Expected "
+            ^ (List.length params |> string_of_int)
+            ^ " arguments")));
+    ignore (interpret_stmt body);
+    envi := Environment.close_block !envi;
+    (* A unit function *)
+    Nil
+  in
+  (* Should use the global scope? We differ from the book here *)
+  envi := Environment.add ~id:name (Fun func) !envi
 
 let interpret = List.iter interpret_decl

@@ -2,7 +2,7 @@
  (name olox)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq))
- (libraries containers))
+ (libraries containers mtime.clock.os))
 
 (rule
  (targets parser.mli parser.ml)

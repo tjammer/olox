@@ -65,6 +65,7 @@ prog: decls = list(decl); Eof { decls }
 decl:
   | var = var_decl { var }
   | s = stmt { Stmt s }
+  | func = function_ { func }
 
 var_decl:
   | Var; id = Identifier; Equal; e = expr; Semicolon { Var_decl (id, Some e) }
@@ -73,10 +74,18 @@ var_decl:
 stmt:
   | e = expr; Semicolon { Expr e }
   | Print; e = expr; Semicolon { Print e }
-  | Left_brace; decls = list(decl); Right_brace { Block decls }
+  | blck = block { blck }
   | If; Left_paren; e = expr; Right_paren; thn = stmt; els = else_opt { If (e, thn, els) }
   | While; Left_paren; e = expr; Right_paren; s = stmt { While (e, s) }
   | for_ = for_loop { for_ }
+
+block:
+  | Left_brace; decls = list(decl); Right_brace { Block decls }
+
+function_:
+  | Fun; id = Identifier; Left_paren; parameters = separated_list(Comma, Identifier); Right_paren;
+    body = block
+    { Fun_decl { name = id; parameters; body } }
 
 else_opt:
   | Else; s = stmt { Some s }
@@ -88,12 +97,7 @@ for_loop:
     { Block [init; Stmt (While (cond, Block [ Stmt s; Stmt (Expr incr) ]))]}
 
 expr:
-  | num = Number { Literal (Number num) }
-  | str = String { Literal (String str) }
-  | True { Literal (Bool true) }
-  | False { Literal (Bool false) }
-  | Nil { Literal Nil }
-  | id =  Identifier { Literal (Identifier id) }
+  | prim = primary { Primary prim }
   | Bang; e = expr { Unary { op = Not ; expr = e } }
   | Minus; e = expr { Unary { op = Neg ; expr = e } }
   | left = expr; Less; right = expr { Binary { left ; op = Less ; right } }
@@ -105,8 +109,21 @@ expr:
   | left = expr; Star; right = expr { Binary { left ; op = Star ; right } }
   | left = expr; Slash; right = expr { Binary { left ; op = Slash ; right } }
   | left = expr; Equal_equal; right = expr { Binary { left ; op = Equal_equal ; right } }
-  | Left_paren; e = expr; Right_paren { Grouping e }
   | lval = expr; Equal; e = expr { Assign (make_lvalue lval, e) }
   | left = expr; And; right = expr { Logical (And, left, right)}
   | left = expr; Or; right = expr { Logical (Or, left, right)}
+  | cl = call { cl }
+
+call:
+  | prim = primary; Left_paren; params = separated_list(Comma, expr); Right_paren
+    { Call (prim, params) }
+
+primary:
+  | num = Number { Literal (Number num) }
+  | str = String { Literal (String str) }
+  | True { Literal (Bool true) }
+  | False { Literal (Bool false) }
+  | Nil { Literal Nil }
+  | id =  Identifier { Literal (Identifier id) }
+  | Left_paren; e = expr; Right_paren { Grouping e }
 ;
