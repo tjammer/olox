@@ -1,0 +1,14 @@
+if (true) {
+   if (false)
+      print "nothing";
+   else
+      print "when false";
+}
+
+if (true or false)
+   print "always true";
+
+if (true and false)
+   print "never";
+else
+   print "but here";

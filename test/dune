@@ -1,2 +1,2 @@
-(test
- (name olox_test))
+(cram
+ (deps %{bin:olox}))

@@ -1,0 +1,41 @@
+Test if statements and their nesting
+
+  $ dune exec -- olox if.lox
+  (Ast.String "when false")
+  (Ast.String "always true")
+  (Ast.String "but here")
+
+  $ dune exec -- olox while.lox
+  (Ast.Number 0.)
+  (Ast.Number 1.)
+  (Ast.Number 2.)
+  (Ast.Number 3.)
+  (Ast.Number 4.)
+  (Ast.Number 5.)
+  (Ast.Number 6.)
+  (Ast.Number 7.)
+  (Ast.Number 8.)
+  (Ast.Number 9.)
+
+  $ dune exec -- olox for.lox
+  (Ast.Number 0.)
+  (Ast.Number 1.)
+  (Ast.Number 1.)
+  (Ast.Number 2.)
+  (Ast.Number 3.)
+  (Ast.Number 5.)
+  (Ast.Number 8.)
+  (Ast.Number 13.)
+  (Ast.Number 21.)
+  (Ast.Number 34.)
+  (Ast.Number 55.)
+  (Ast.Number 89.)
+  (Ast.Number 144.)
+  (Ast.Number 233.)
+  (Ast.Number 377.)
+  (Ast.Number 610.)
+  (Ast.Number 987.)
+  (Ast.Number 1597.)
+  (Ast.Number 2584.)
+  (Ast.Number 4181.)
+  (Ast.Number 6765.)
