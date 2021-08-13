@@ -1,7 +1,7 @@
 We test functions and their return values
 
   $ dune exec -- olox add.lox
-  (Ast.Fun <fun>)
+  Ast.Fun {name = "add"; call = <fun>}
 
   $ dune exec -- olox hi.lox
   (Ast.String "Hi, Dear Reader!")

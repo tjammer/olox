@@ -20,7 +20,7 @@ type literal =
   | Identifier of string
   | Bool of bool
   | Nil
-  | Fun of (expr list -> literal)
+  | Fun of { name : string; call : expr list -> literal }
 [@@deriving show]
 
 and primary = Literal of literal | Grouping of expr
@@ -43,11 +43,7 @@ and statement =
 and decl =
   | Var_decl of string * expr option
   | Stmt of statement
-  | Fun_decl of {
-      name : string;
-      parameters : string list;
-      body : statement;
-    }
+  | Fun_decl of { name : string; parameters : string list; body : statement }
 
 let parenthesize str = "(" ^ String.concat " " str ^ ")"
 

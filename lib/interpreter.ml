@@ -16,7 +16,7 @@ module Environment = struct
           Number (Mtime.Span.to_ms t)
       | _ -> raise (RuntimeError "Wrong arity: Expected 0 arguments")
     in
-    [ StrMap.add "clock" (Fun clock) StrMap.empty ]
+    [ StrMap.add "clock" (Fun { name = "clock"; call = clock }) StrMap.empty ]
 
   let empty : t = [ StrMap.empty ]
 
@@ -129,7 +129,7 @@ and interpret_call func args =
   match interpret_expr (Primary func) with
   | Fun func ->
       (* Arity check happens in the closure *)
-      func args
+      func.call args
   | l ->
       raise
         (RuntimeError ("Cannot call " ^ show_literal l ^ ". Not a function"))
@@ -175,7 +175,7 @@ and interpret_decl = function
       interpret_fun_decl name parameters body
 
 and interpret_fun_decl name params body =
-  let func arguments =
+  let call arguments =
     (* We create a new block with the parameter bindings *)
     envi := Environment.open_block !envi;
 
@@ -196,6 +196,6 @@ and interpret_fun_decl name params body =
     Nil
   in
   (* Should use the global scope? We differ from the book here *)
-  envi := Environment.add ~id:name (Fun func) !envi
+  envi := Environment.add ~id:name (Fun { name; call }) !envi
 
 let interpret = List.iter interpret_decl
