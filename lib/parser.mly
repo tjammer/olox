@@ -78,6 +78,7 @@ stmt:
   | If; Left_paren; e = expr; Right_paren; thn = stmt; els = else_opt { If (e, thn, els) }
   | While; Left_paren; e = expr; Right_paren; s = stmt { While (e, s) }
   | for_ = for_loop { for_ }
+  | Return; e = option(expr); Semicolon { Return e }
 
 block:
   | Left_brace; decls = list(decl); Right_brace { Block decls }

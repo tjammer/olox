@@ -135,20 +135,45 @@ and interpret_call func args =
         (RuntimeError ("Cannot call " ^ show_literal l ^ ". Not a function"))
 
 let rec interpret_stmt = function
-  | Expr e -> ignore (interpret_expr e)
-  | Print e -> print_endline (interpret_expr e |> show_literal)
-  | Block decls ->
-      envi := Environment.open_block !envi;
-      List.iter interpret_decl decls;
-      envi := Environment.close_block !envi
+  (* This returns either Some, if we hit a return statement
+   * or None *)
+  | Expr e ->
+      ignore (interpret_expr e);
+      None
+  | Print e ->
+      print_endline (interpret_expr e |> show_literal);
+      None
+  | Block decls -> interpret_block decls
   | If (expr, then', else') -> interpret_if expr then' else'
   | While (expr, stmt) -> interpret_while expr stmt
+  | Return expr -> (
+      match expr with
+      | Some expr -> Some (interpret_expr expr)
+      | None -> Some Nil)
+
+and interpret_block decls =
+  let rec do_until lst ret =
+    if Option.is_some ret then ret
+    else
+      match lst with
+      | [] -> None
+      | Stmt s :: tail ->
+          let ret = interpret_stmt s in
+          do_until tail ret
+      | decl :: decls ->
+          interpret_decl decl;
+          do_until decls ret
+  in
+  envi := Environment.open_block !envi;
+  let ret = do_until decls None in
+  envi := Environment.close_block !envi;
+  ret
 
 and interpret_if expr then' else' =
   match interpret_expr expr with
   | Bool bool -> (
       if bool then interpret_stmt then'
-      else match else' with Some else' -> interpret_stmt else' | None -> ())
+      else match else' with Some else' -> interpret_stmt else' | None -> None)
   | _ ->
       raise (RuntimeError "Expression in if condition must evaluate to a bool")
 
@@ -160,9 +185,14 @@ and interpret_while expr stmt =
         raise
           (RuntimeError "Expression in while condition must evaluate to a bool")
   in
-  while condition () do
-    interpret_stmt stmt
-  done
+  let rec do_while () =
+    if condition () then
+      match interpret_stmt stmt with
+      | Some ret -> Some ret
+      | None -> do_while ()
+    else None
+  in
+  do_while ()
 
 and interpret_decl = function
   | Var_decl (id, expr) ->
@@ -190,11 +220,13 @@ and interpret_fun_decl name params body =
             ("Wrong arity: Expected "
             ^ (List.length params |> string_of_int)
             ^ " arguments")));
-    ignore (interpret_stmt body);
+
+    let ret = interpret_stmt body in
     envi := Environment.close_block !envi;
-    (* A unit function *)
-    Nil
+
+    match ret with Some ret -> ret | None -> Nil
   in
+
   (* Should use the global scope? We differ from the book here *)
   envi := Environment.add ~id:name (Fun { name; call }) !envi
 

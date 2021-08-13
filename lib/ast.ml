@@ -39,6 +39,7 @@ and statement =
   | Block of decl list
   | If of expr * statement * statement option
   | While of expr * statement
+  | Return of expr option
 
 and decl =
   | Var_decl of string * expr option
