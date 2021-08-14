@@ -2,61 +2,6 @@ open Ast
 
 exception RuntimeError of string
 
-module Environment = struct
-  module StrMap = Map.Make (String)
-
-  type t = literal StrMap.t list
-
-  let globals : t =
-    let clock params =
-      (* We need to check the arity ourselven *)
-      match params with
-      | [] ->
-          let t = Mtime_clock.elapsed () in
-          Number (Mtime.Span.to_ms t)
-      | _ -> raise (RuntimeError "Wrong arity: Expected 0 arguments")
-    in
-    [ StrMap.add "clock" (Fun { name = "clock"; call = clock }) StrMap.empty ]
-
-  let empty : t = [ StrMap.empty ]
-
-  let add ~id value = function
-    | [] ->
-        (* We print a warning, b/c this should never happen.
-         * It's not actually a problem though *)
-        prerr_endline "Internal error: There is an empty environment. How?";
-        [ StrMap.(add id value StrMap.empty) ]
-    | env :: envs -> StrMap.(add id value env) :: envs
-
-  let replace ~id value env =
-    let rec aux ~id value head = function
-      | [] -> raise (RuntimeError ("Variable " ^ id ^ " does not exist"))
-      | env :: envs -> (
-          match StrMap.find_opt id env with
-          | Some _ ->
-              let env = StrMap.(add id value env) in
-              List.rev head @ (env :: envs)
-          | None -> aux ~id value (env :: head) envs)
-    in
-    aux ~id value [] env
-
-  let rec find ~id = function
-    | [] -> None
-    | env :: envs -> (
-        match StrMap.find_opt id env with
-        | Some value -> Some value
-        | None -> find ~id envs)
-
-  let open_block = List.cons StrMap.empty
-
-  let close_block = function
-    | [] ->
-        (* As above, this should never happen. *)
-        prerr_endline "Internal error: There is an empty environment. How?";
-        empty
-    | _ :: env -> env
-end
-
 let envi = ref Environment.globals
 
 let rec interpret_expr = function
@@ -75,9 +20,7 @@ let rec interpret_expr = function
       envi := Environment.replace ~id value !envi;
       value
   | Logical (op, left, right) -> interpret_logicalop op left right
-  | Call (func, arguments) ->
-      (* TODO set global environment *)
-      interpret_call func arguments
+  | Call (func, arguments) -> interpret_call func arguments
 
 and interpret_logicalop op left right =
   match (interpret_expr left, interpret_expr right) with
@@ -129,7 +72,7 @@ and interpret_call func args =
   match interpret_expr (Primary func) with
   | Fun func ->
       (* Arity check happens in the closure *)
-      func.call args
+      func.call (List.map interpret_expr args)
   | l ->
       raise
         (RuntimeError ("Cannot call " ^ show_literal l ^ ". Not a function"))
@@ -205,14 +148,16 @@ and interpret_decl = function
       interpret_fun_decl name parameters body
 
 and interpret_fun_decl name params body =
+  let closure = ref !envi in
+  let closure_len = List.length !closure in
   let call arguments =
-    (* We create a new block with the parameter bindings *)
-    envi := Environment.open_block !envi;
+    (* We create a new block with the parameter bindings.
+     * This is not really correct, but good enough for now *)
+    envi := Environment.open_block (!closure @ !envi);
 
     (try
        List.iter2
-         (fun id argument ->
-           envi := Environment.add ~id (interpret_expr argument) !envi)
+         (fun id argument -> envi := Environment.add ~id argument !envi)
          params arguments
      with Invalid_argument _ ->
        raise
@@ -222,7 +167,13 @@ and interpret_fun_decl name params body =
             ^ " arguments")));
 
     let ret = interpret_stmt body in
-    envi := Environment.close_block !envi;
+
+    (* Save the changes done to the closere environment *)
+    let new_closure, env =
+      CCList.take_drop closure_len (Environment.close_block !envi)
+    in
+    closure := new_closure;
+    envi := env;
 
     match ret with Some ret -> ret | None -> Nil
   in

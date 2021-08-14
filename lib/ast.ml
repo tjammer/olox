@@ -20,7 +20,7 @@ type literal =
   | Identifier of string
   | Bool of bool
   | Nil
-  | Fun of { name : string; call : expr list -> literal }
+  | Fun of { name : string; call : literal list -> literal }
 [@@deriving show]
 
 and primary = Literal of literal | Grouping of expr

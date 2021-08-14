@@ -41,3 +41,9 @@ Fibonacci example
   (Ast.Number 1597.)
   (Ast.Number 2584.)
   (Ast.Number 4181.)
+
+Closure
+
+  $ dune exec -- olox closure.lox
+  (Ast.Number 1.)
+  (Ast.Number 2.)
