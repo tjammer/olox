@@ -17,34 +17,37 @@ let globals : t =
 
 let empty : t = [ StrMap.empty ]
 
-let add ~id value = function
+let add ~name value = function
   | [] ->
       (* We print a warning, b/c this should never happen.
        * It's not actually a problem though *)
       prerr_endline "Internal error: There is an empty environment. How?";
-      [ StrMap.(add id value StrMap.empty) ]
-  | env :: envs -> StrMap.(add id value env) :: envs
+      [ StrMap.(add name value StrMap.empty) ]
+  | env :: envs -> StrMap.(add name value env) :: envs
 
-let replace ~id value env =
-  let rec aux ~id value head = function
-    | [] -> raise (RuntimeError ("Variable " ^ id ^ " does not exist"))
+let replace ~name value env =
+  let rec aux ~name value head = function
+    | [] -> raise (RuntimeError ("Variable " ^ name ^ " does not exist"))
     | env :: envs -> (
-        match StrMap.find_opt id env with
+        match StrMap.find_opt name env with
         | Some _ ->
-            let env = StrMap.(add id value env) in
+            let env = StrMap.(add name value env) in
             List.rev head @ (env :: envs)
-        | None -> aux ~id value (env :: head) envs)
+        | None -> aux ~name value (env :: head) envs)
   in
-  aux ~id value [] env
+  aux ~name value [] env
 
-let rec find ~id = function
-  | [] -> None
-  | env :: envs -> (
-      match StrMap.find_opt id env with
-      | Some value -> Some value
-      | None -> find ~id envs)
+let find ~name =
+  let rec aux ~name = function
+    | [] -> None
+    | env :: envs -> (
+        match StrMap.find_opt name env with
+        | Some value -> Some value
+        | None -> aux ~name envs)
+  in
+  aux ~name
 
-let open_block : t -> t = List.cons StrMap.empty
+let open_block env = List.cons StrMap.empty env
 
 let close_block = function
   | [] ->

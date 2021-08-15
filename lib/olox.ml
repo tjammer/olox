@@ -65,8 +65,10 @@ let parse_with_error lexbuf =
 let run src =
   let lexbuf = Lexing.from_string src in
   match parse_with_error lexbuf with
-  | Ok expr -> (
-      try ignore (Interpreter.interpret expr)
+  | Ok decls -> (
+      (* TODO errors in static ana *)
+      let stat =  (Static_analysis.make decls) in
+      try ignore (Interpreter.interpret stat decls)
       with Interpreter.RuntimeError err ->
         print_string "RuntimeError: ";
         print_endline err)

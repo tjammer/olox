@@ -1,26 +1,32 @@
 open Ast
+open Containers
 
 exception RuntimeError of string
 
-let envi = ref Environment.globals
+let env = ref Environment.globals
+
+let static_analysis : Static_analysis.t ref = ref []
 
 let rec interpret_expr = function
   (* Since olox is in imperative language, an expression can update the env
    * as a side effect. We use a ref for that *)
-  | Primary (Literal (Identifier id)) -> (
-      match Environment.find ~id !envi with
-      | Some l -> l
-      | None -> raise (RuntimeError ("Cannot find variable '" ^ id ^ "'")))
-  | Primary (Literal l) -> l
+  | Primary primary -> interpret_primary primary
   | Unary { op; expr } -> interpret_unop op expr
   | Binary { left; op; right } -> interpret_binop op left right
-  | Primary (Grouping e) -> interpret_expr e
-  | Assign (id, expr) ->
+  | Assign (name, expr) ->
       let value = interpret_expr expr in
-      envi := Environment.replace ~id value !envi;
+      env := Environment.replace ~name value !env;
       value
   | Logical (op, left, right) -> interpret_logicalop op left right
   | Call (func, arguments) -> interpret_call func arguments
+
+and interpret_primary = function
+  | Literal (Identifier name) -> (
+      match Environment.find ~name !env with
+      | Some l -> l
+      | None -> raise (RuntimeError ("Cannot find variable '" ^ name ^ "'")))
+  | Literal l -> l
+  | Grouping e -> interpret_expr e
 
 and interpret_logicalop op left right =
   match (interpret_expr left, interpret_expr right) with
@@ -38,10 +44,10 @@ and interpret_unop op expr =
 
 and interpret_binop op left right =
   match (op, interpret_expr left, interpret_expr right) with
-  | Less, Number left, Number right -> Bool (left < right)
-  | Less_equal, Number left, Number right -> Bool (left <= right)
-  | Greater, Number left, Number right -> Bool (left > right)
-  | Greater_equal, Number left, Number right -> Bool (left >= right)
+  | Less, Number left, Number right -> Bool (left <. right)
+  | Less_equal, Number left, Number right -> Bool (left <=. right)
+  | Greater, Number left, Number right -> Bool (left >. right)
+  | Greater_equal, Number left, Number right -> Bool (left >=. right)
   | Equal_equal, left, right -> interpret_equal left right
   | Plus, Number left, Number right -> Number (left +. right)
   | Minus, Number left, Number right -> Number (left -. right)
@@ -107,9 +113,9 @@ and interpret_block decls =
           interpret_decl decl;
           do_until decls ret
   in
-  envi := Environment.open_block !envi;
+  env := Environment.open_block !env;
   let ret = do_until decls None in
-  envi := Environment.close_block !envi;
+  env := Environment.close_block !env;
   ret
 
 and interpret_if expr then' else' =
@@ -138,26 +144,27 @@ and interpret_while expr stmt =
   do_while ()
 
 and interpret_decl = function
-  | Var_decl (id, expr) ->
+  | Var_decl (name, expr) ->
       let expr =
         match expr with Some expr -> interpret_expr expr | None -> Nil
       in
-      envi := Environment.add ~id expr !envi
+      env := Environment.add ~name expr !env
   | Stmt s -> ignore (interpret_stmt s)
   | Fun_decl { name; parameters; body } ->
       interpret_fun_decl name parameters body
 
 and interpret_fun_decl name params body =
-  let closure = ref !envi in
-  let closure_len = List.length !closure in
+  let closure = ref !env in
+
   let call arguments =
     (* We create a new block with the parameter bindings.
      * This is not really correct, but good enough for now *)
-    envi := Environment.open_block (!closure @ !envi);
+    let saved_env = !env in
+    env := Environment.open_block !closure;
 
     (try
        List.iter2
-         (fun id argument -> envi := Environment.add ~id argument !envi)
+         (fun name argument -> env := Environment.add ~name argument !env)
          params arguments
      with Invalid_argument _ ->
        raise
@@ -169,16 +176,17 @@ and interpret_fun_decl name params body =
     let ret = interpret_stmt body in
 
     (* Save the changes done to the closere environment *)
-    let new_closure, env =
-      CCList.take_drop closure_len (Environment.close_block !envi)
-    in
-    closure := new_closure;
-    envi := env;
+    closure := Environment.close_block !env;
+    env := saved_env;
 
     match ret with Some ret -> ret | None -> Nil
   in
 
   (* Should use the global scope? We differ from the book here *)
-  envi := Environment.add ~id:name (Fun { name; call }) !envi
+  env := Environment.add ~name (Fun { name; call }) !env;
+  (* We add the function to the closure for recursion *)
+  closure := Environment.add ~name (Fun { name; call }) !closure
 
-let interpret = List.iter interpret_decl
+let interpret stat =
+  static_analysis := stat;
+  List.iter interpret_decl

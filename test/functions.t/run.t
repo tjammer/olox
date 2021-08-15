@@ -47,3 +47,9 @@ Closure
   $ dune exec -- olox closure.lox
   (Ast.Number 1.)
   (Ast.Number 2.)
+
+The function should not see variables which are declared in the future
+
+  $ dune exec -- olox closure_dont_overwrite.lox
+  (Ast.String "global")
+  (Ast.String "global")
