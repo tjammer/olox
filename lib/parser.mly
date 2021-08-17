@@ -42,7 +42,7 @@
 %token While
 %token Eof
 
-%left Equal
+%right Equal
 %left Or
 %left And
 %nonassoc Equal_equal

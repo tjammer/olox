@@ -1,3 +1,10 @@
 clock();
 
 var time = clock;
+
+// Use variable
+fun unused(t) {
+    t;
+}
+
+unused(time);

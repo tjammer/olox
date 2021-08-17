@@ -8,4 +8,7 @@ var a = "global";
   showA();
   var a = "block";
   showA();
+
+  // We use the variables
+  a = b = 0;
 }

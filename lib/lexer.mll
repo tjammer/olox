@@ -28,7 +28,7 @@ rule read =
   | float    { Number (float_of_string (Lexing.lexeme lexbuf)) }
   | "true"   { True }
   | "false"  { False }
-  | "null"   { Nil }
+  | "nil"    { Nil }
   | "and"    { And }
   | "print"  { Print }
   | "var"    { Var }
