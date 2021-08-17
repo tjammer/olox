@@ -5,8 +5,6 @@ exception RuntimeError of string
 
 let env = ref Environment.globals
 
-let static_analysis : Static_analysis.t ref = ref []
-
 let rec interpret_expr = function
   (* Since olox is in imperative language, an expression can update the env
    * as a side effect. We use a ref for that *)
@@ -187,6 +185,4 @@ and interpret_fun_decl name params body =
   (* We add the function to the closure for recursion *)
   closure := Environment.add ~name (Fun { name; call }) !closure
 
-let interpret stat =
-  static_analysis := stat;
-  List.iter interpret_decl
+let interpret = List.iter interpret_decl

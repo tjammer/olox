@@ -67,8 +67,8 @@ let run src =
   match parse_with_error lexbuf with
   | Ok decls -> (
       (* TODO errors in static ana *)
-      let stat =  (Static_analysis.make decls) in
-      try ignore (Interpreter.interpret stat decls)
+      ignore (Static_analysis.make decls);
+      try ignore (Interpreter.interpret decls)
       with Interpreter.RuntimeError err ->
         print_string "RuntimeError: ";
         print_endline err)

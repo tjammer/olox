@@ -6,6 +6,6 @@ fun count(n) {
     }
 }
 
-var count = count(1);
+var cnt = count(1);
 print "done";
-print count;
+print cnt;

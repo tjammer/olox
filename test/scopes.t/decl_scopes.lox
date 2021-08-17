@@ -1,11 +1,12 @@
 var a = 1;
 {
-  var a = a + 2;
-  print a;
+  var b = a + 2;
+  print b;
 }
 
 {
-   a = a + 1;
+   var b = a;
+   a = b + 1;
 }
 
 print a;
