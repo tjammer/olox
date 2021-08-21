@@ -2,20 +2,9 @@ module StrMap = Map.Make (String)
 
 exception RuntimeError of string
 
-type t = Ast.literal StrMap.t list
+type 'a t = 'a StrMap.t list
 
-let globals : t =
-  let clock params =
-    (* We need to check the arity ourselven *)
-    match params with
-    | [] ->
-        let t = Mtime_clock.elapsed () in
-        Ast.Number (Mtime.Span.to_ms t)
-    | _ -> raise (RuntimeError "Wrong arity: Expected 0 arguments")
-  in
-  [ StrMap.add "clock" (Ast.Fun { name = "clock"; call = clock }) StrMap.empty ]
-
-let empty : t = [ StrMap.empty ]
+let empty : 'a t = [ StrMap.empty ]
 
 let add ~name value = function
   | [] ->
@@ -55,3 +44,5 @@ let close_block = function
       prerr_endline "Internal error: There is an empty environment. How?";
       empty
   | _ :: env -> env
+
+(* let pp : Format.formatter -> 'a t -> unit = fun _ _ -> () *)

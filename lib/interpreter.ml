@@ -3,7 +3,7 @@ open Containers
 
 exception RuntimeError of string
 
-let env = ref Environment.globals
+let env = ref Globals.globals
 
 let rec interpret_expr = function
   (* Since olox is in imperative language, an expression can update the env
