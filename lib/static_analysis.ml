@@ -9,7 +9,9 @@ exception StaticError of string
 
 type symbol = { defined : bool; used : bool }
 
-type t = { def : symbol SymbolTbl.t list }
+type env_state = { def : symbol SymbolTbl.t; in_func : bool }
+
+type t = env_state list
 
 let create () =
   let globals = SymbolTbl.create 4 in
@@ -17,31 +19,36 @@ let create () =
    * In contrast to jlox, we resolve all symbols here,
    * including globals *)
   SymbolTbl.add globals "clock" { defined = true; used = true };
-
-  { def = [ globals ] }
+  let in_func = false in
+  [ { def = globals; in_func } ]
 
 let ( %. ) = Fun.flip
 
 let empty_scope () = failwith "Internal_error: Empty scope stack"
 
-(* We start with the more interesting nodes for the resolver in the book *)
-let rec resolve_block data decls =
-  begin_scope data |> List.fold_left resolve_decl %. decls |> end_scope
+let rec toplevel_return = function
+  | scope :: _ when scope.in_func -> ()
+  | [] -> raise (StaticError "Can't return from toplevel code")
+  | _ :: scopes -> toplevel_return scopes
 
-and begin_scope { def } = { def = SymbolTbl.create 4 :: def }
+let begin_scope ?(in_func = false) data =
+  { def = SymbolTbl.create 4; in_func } :: data
 
-and end_scope { def } =
-  match def with
+let end_scope = function
   | [] -> empty_scope ()
-  | scope :: def ->
+  | scope :: scopes ->
       (* We check if all variables in the scope have been used.
          Otherwise, we throw *)
       SymbolTbl.iter
         (fun name symbol ->
           if not symbol.used then
             raise (StaticError (Printf.sprintf "Unused variable: %s" name)))
-        scope;
-      { def }
+        scope.def;
+      scopes
+
+(* We start with the more interesting nodes for the resolver in the book *)
+let rec resolve_block data decls =
+  begin_scope data |> List.fold_left resolve_decl %. decls |> end_scope
 
 and resolve_decl data = function
   | Var_decl (name, expr) -> resolve_var_decl data name expr
@@ -63,7 +70,7 @@ and resolve_fun_decl data name parameters body =
 and resolve_class_decl data name = declare data name |> define name
 
 and resolve_fun data parameters body =
-  begin_scope data
+  begin_scope ~in_func:true data
   |> List.fold_left (fun data name -> declare data name |> define name)
      %. parameters
   |> resolve_stmt %. body |> end_scope
@@ -75,24 +82,28 @@ and resolve_stmt data = function
       resolve_expr data expr |> resolve_stmt %. then' |> fun data ->
       match else' with Some stmt -> resolve_stmt data stmt | None -> data)
   | Print expr -> resolve_expr data expr
-  | Return None -> data
-  | Return (Some expr) -> resolve_expr data expr
+  | Return None ->
+      toplevel_return data;
+      data
+  | Return (Some expr) ->
+      toplevel_return data;
+      resolve_expr data expr
   | While (expr, stmt) -> resolve_expr data expr |> resolve_stmt %. stmt
 
 and declare data name =
-  match data.def with
+  match data with
   | [] -> empty_scope ()
   | scope :: _ ->
-      SymbolTbl.replace scope name { defined = false; used = false };
+      SymbolTbl.replace scope.def name { defined = false; used = false };
       data
 
 and define name data =
-  match data.def with
+  match data with
   | [] -> empty_scope ()
   | scope :: _ ->
-      (match SymbolTbl.find_opt scope name with
+      (match SymbolTbl.find_opt scope.def name with
       | Some symbol ->
-          SymbolTbl.replace scope name { symbol with defined = true }
+          SymbolTbl.replace scope.def name { symbol with defined = true }
       | None -> failwith "Internal error: Define should be called after declare");
       data
 
@@ -115,10 +126,10 @@ and resolve_primary data = function
 
 and resolve_value data = function
   | Identifier name -> (
-      match data.def with
+      match data with
       | [] -> empty_scope ()
       | scope :: _ -> (
-          match SymbolTbl.find_opt scope name with
+          match SymbolTbl.find_opt scope.def name with
           (* I don't think this should be an error, but we go with the book *)
           | Some { defined = false; used = _ } ->
               raise
@@ -147,16 +158,16 @@ and resolve name data =
   let rec aux i = function
     | [] -> raise (StaticError ("Variable '" ^ name ^ "' does not exist"))
     | scope :: scopes -> (
-        match SymbolTbl.find_opt scope name with
+        match SymbolTbl.find_opt scope.def name with
         | None -> aux (i + 1) scopes
         | Some _ ->
             (* The variable had to be resolved, so we mark it used *)
-            SymbolTbl.replace scope name { defined = true; used = true })
+            SymbolTbl.replace scope.def name { defined = true; used = true })
   in
-  aux 0 data.def
+  aux 0 data
 
 let make decls =
   match List.fold_left resolve_decl (create ()) decls with
-  | { def = [ _ ] } as scope -> end_scope scope
-  | { def = [] } -> failwith "Internal error: Where is the last scope?"
-  | { def = _ :: _ } -> failwith "Internal error: Some scopes are not closed"
+  | [ _ ] as scope -> end_scope scope
+  | [] -> failwith "Internal error: Where is the last scope?"
+  | _ :: _ :: _ -> failwith "Internal error: Some scopes are not closed"
