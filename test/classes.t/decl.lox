@@ -1,0 +1,15 @@
+class DevonshireCream {
+    serveOn() {
+        return "Scones";
+    }
+}
+
+print DevonshireCream;
+
+// We create an instance
+
+var devonshirecream = DevonshireCream ();
+
+// The field does not exist
+
+print devonshirecream.field;

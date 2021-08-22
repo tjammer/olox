@@ -11,4 +11,8 @@ let globals =
         Ast.Number (Mtime.Span.to_ms t)
     | _ -> raise (RuntimeError "Wrong arity: Expected 0 arguments")
   in
-  [ StrMap.add "clock" (Ast.Fun { name = "clock"; call = clock }) StrMap.empty ]
+  [
+    StrMap.add "clock"
+      (Ast.Fun { callable = "clock"; call = clock })
+      StrMap.empty;
+  ]

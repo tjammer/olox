@@ -48,6 +48,7 @@ and resolve_decl data = function
   | Fun_decl { name; parameters; body } ->
       resolve_fun_decl data name parameters body
   | Stmt stmt -> resolve_stmt data stmt
+  | Class_decl (name, _) -> resolve_class_decl data name
 
 and resolve_var_decl data name expr =
   declare data name
@@ -58,6 +59,8 @@ and resolve_var_decl data name expr =
 and resolve_fun_decl data name parameters body =
   let data = declare data name |> define name in
   resolve_fun data parameters body
+
+and resolve_class_decl data name = declare data name |> define name
 
 and resolve_fun data parameters body =
   begin_scope data
@@ -96,20 +99,21 @@ and define name data =
 and resolve_expr data = function
   | Primary primary -> resolve_primary data primary
   | Assign (name, expr) ->
-      let data = resolve_expr data expr in
-      resolve name data;
-      data
+      resolve_expr data expr |> resolve_assign_target %. name
   | Unary un -> resolve_expr data un.expr
   | Binary bin -> resolve_expr data bin.left |> resolve_expr %. bin.right
   | Logical (_, left, right) -> resolve_expr data left |> resolve_expr %. right
   | Call (name, exprs) ->
       resolve_primary data name |> List.fold_left resolve_expr %. exprs
+  | Class_get (instance, _) ->
+      (* We don't resolve the field, b/c we want to be able to dynamically add data *)
+      resolve_primary data instance
 
 and resolve_primary data = function
-  | Literal lit -> resolve_literal data lit
+  | Value lit -> resolve_value data lit
   | Grouping expr -> resolve_expr data expr
 
-and resolve_literal data = function
+and resolve_value data = function
   | Identifier name -> (
       match data.def with
       | [] -> empty_scope ()
@@ -124,7 +128,20 @@ and resolve_literal data = function
               resolve name data;
 
               data))
+  | Class _ -> data
+  | Instance _ -> data
   | Number _ | String _ | Bool _ | Nil | Fun _ -> data
+
+and resolve_assign_target data = function
+  (* So far, we only allow plain identifiers *)
+  | Primary (Value (Identifier name)) ->
+      resolve name data;
+      data
+  | Class_get (instance, _) -> resolve_primary data instance
+  | expr ->
+      raise
+        (StaticError
+           ("Assignment only allowed to identifiers, not: " ^ show_expr expr))
 
 and resolve name data =
   let rec aux i = function

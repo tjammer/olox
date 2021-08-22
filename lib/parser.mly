@@ -65,7 +65,8 @@ prog: decls = list(decl); Eof { decls }
 decl:
   | var = var_decl { var }
   | s = stmt { Stmt s }
-  | func = function_ { func }
+  | Fun; func { Fun_decl $2 }
+  | Class; Identifier; Left_brace; list(func); Right_brace; { Class_decl ($2, $4) }
 
 var_decl:
   | Var; id = Identifier; Equal; e = expr; Semicolon { Var_decl (id, Some e) }
@@ -83,10 +84,10 @@ stmt:
 block:
   | Left_brace; decls = list(decl); Right_brace { Block decls }
 
-function_:
-  | Fun; id = Identifier; Left_paren; parameters = separated_list(Comma, Identifier); Right_paren;
-    body = block
-    { Fun_decl { name = id; parameters; body } }
+func:
+  | Identifier; Left_paren; separated_list(Comma, Identifier); Right_paren;
+    block
+    { { name = $1; parameters = $3; body = $5 } }
 
 else_opt:
   | Else; s = stmt { Some s }
@@ -110,21 +111,33 @@ expr:
   | left = expr; Star; right = expr { Binary { left ; op = Star ; right } }
   | left = expr; Slash; right = expr { Binary { left ; op = Slash ; right } }
   | left = expr; Equal_equal; right = expr { Binary { left ; op = Equal_equal ; right } }
-  | lval = expr; Equal; e = expr { Assign (make_lvalue lval, e) }
+  | assign { $1 }
   | left = expr; And; right = expr { Logical (And, left, right)}
   | left = expr; Or; right = expr { Logical (Or, left, right)}
-  | cl = call { cl }
+  | call { $1 }
+  | class_get { $1 }
+
+assign:
+  | expr; Equal; expr { Assign ($1, $3) }
+/* We check in the static analysis step that the expr is a correct lvalue */
 
 call:
-  | prim = primary; Left_paren; params = separated_list(Comma, expr); Right_paren
-    { Call (prim, params) }
+  | primary; Left_paren; separated_list(Comma, expr); Right_paren
+    { Call ($1, $3) }
+
+in_chain:
+  | call { $1 }
+  | Identifier { $1 }
+
+class_get:
+  | primary; Dot; Identifier   { Class_get ($1, $3) }
 
 primary:
-  | num = Number { Literal (Number num) }
-  | str = String { Literal (String str) }
-  | True { Literal (Bool true) }
-  | False { Literal (Bool false) }
-  | Nil { Literal Nil }
-  | id =  Identifier { Literal (Identifier id) }
+  | num = Number { Value (Number num) }
+  | str = String { Value (String str) }
+  | True { Value (Bool true) }
+  | False { Value (Bool false) }
+  | Nil { Value Nil }
+  | id =  Identifier { Value (Identifier id) }
   | Left_paren; e = expr; Right_paren { Grouping e }
 ;

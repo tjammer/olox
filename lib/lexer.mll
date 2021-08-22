@@ -13,7 +13,7 @@ let next_line lexbuf =
 }
 
 let digit = ['0'-'9']
-let frac = '.' digit*
+let frac = '.' digit+
 let exp = ['e' 'E'] ['-' '+']? digit+
 let float = digit* frac? exp?
 
@@ -40,6 +40,7 @@ rule read =
   | "for"    { For }
   | "fun"    { Fun }
   | "return" { Return }
+  | "class"  { Class }
   | id       { Identifier (Lexing.lexeme lexbuf) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
   | '('      { Left_paren }

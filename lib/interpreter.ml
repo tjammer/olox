@@ -11,20 +11,40 @@ let rec interpret_expr = function
   | Primary primary -> interpret_primary primary
   | Unary { op; expr } -> interpret_unop op expr
   | Binary { left; op; right } -> interpret_binop op left right
-  | Assign (name, expr) ->
-      let value = interpret_expr expr in
-      env := Environment.replace ~name value !env;
-      value
+  | Assign (name, expr) -> interpret_assign name expr
   | Logical (op, left, right) -> interpret_logicalop op left right
   | Call (func, arguments) -> interpret_call func arguments
+  | Class_get (instance, field) -> interpret_get instance field
 
 and interpret_primary = function
-  | Literal (Identifier name) -> (
+  | Value (Identifier name) -> (
       match Environment.find ~name !env with
       | Some l -> l
       | None -> raise (RuntimeError ("Cannot find variable '" ^ name ^ "'")))
-  | Literal l -> l
+  | Value l -> l
   | Grouping e -> interpret_expr e
+
+and interpret_assign name expr =
+  match name with
+  | Primary (Value (Identifier name)) ->
+      let value = interpret_expr expr in
+      env := Environment.replace ~name value !env;
+      value
+  | Class_get (name, field) -> (
+      match interpret_primary name with
+      | Instance (_, inst_env) ->
+          let value = interpret_expr expr in
+          inst_env := Environment.add ~name:field value !inst_env;
+          value
+      | value ->
+          raise
+            (RuntimeError
+               ("Assignment target with get expression must be instance, not: "
+              ^ show_value value)))
+  | _ ->
+      failwith
+        ("Internal Error: Assignment to wrong target not caught in static \
+          analysis: " ^ show_expr name)
 
 and interpret_logicalop op left right =
   match (interpret_expr left, interpret_expr right) with
@@ -56,9 +76,9 @@ and interpret_binop op left right =
       raise
         (RuntimeError
            ("Cannot use binary op " ^ show_binop op ^ " with expr "
-           ^ show_literal (interpret_expr left)
+           ^ show_value (interpret_expr left)
            ^ " and "
-           ^ show_literal (interpret_expr right)))
+           ^ show_value (interpret_expr right)))
 
 and interpret_equal left right =
   match (left, right) with
@@ -69,17 +89,32 @@ and interpret_equal left right =
   | _ ->
       raise
         (RuntimeError
-           ("Cannot check equality between " ^ show_literal left ^ " and "
-          ^ show_literal right))
+           ("Cannot check equality between " ^ show_value left ^ " and "
+          ^ show_value right))
 
 and interpret_call func args =
   match interpret_expr (Primary func) with
   | Fun func ->
       (* Arity check happens in the closure *)
       func.call (List.map interpret_expr args)
+  | Class name -> (
+      (* We create a class instance *)
+      match args with
+      | [] -> Instance (name, ref Environment.empty)
+      | _ ->
+          raise
+            (RuntimeError "Can only create class instance without arguments."))
   | l ->
-      raise
-        (RuntimeError ("Cannot call " ^ show_literal l ^ ". Not a function"))
+      raise (RuntimeError ("Cannot call " ^ show_value l ^ ". Not a function"))
+
+and interpret_get instance field =
+  match interpret_primary instance with
+  | Instance (name, env) -> (
+      match Environment.find ~name:field !env with
+      | Some value -> value
+      | None ->
+          raise (RuntimeError ("Undefined property on " ^ name ^ ": " ^ field)))
+  | _ -> raise (RuntimeError "Only instances have properties")
 
 let rec interpret_stmt = function
   (* This returns either Some, if we hit a return statement
@@ -88,7 +123,7 @@ let rec interpret_stmt = function
       ignore (interpret_expr e);
       None
   | Print e ->
-      print_endline (interpret_expr e |> show_literal);
+      print_endline (interpret_expr e |> show_value);
       None
   | Block decls -> interpret_block decls
   | If (expr, then', else') -> interpret_if expr then' else'
@@ -150,6 +185,7 @@ and interpret_decl = function
   | Stmt s -> ignore (interpret_stmt s)
   | Fun_decl { name; parameters; body } ->
       interpret_fun_decl name parameters body
+  | Class_decl (name, _) -> interpret_class_decl name
 
 and interpret_fun_decl name params body =
   let closure = ref !env in
@@ -181,8 +217,10 @@ and interpret_fun_decl name params body =
   in
 
   (* Should use the global scope? We differ from the book here *)
-  env := Environment.add ~name (Fun { name; call }) !env;
+  env := Environment.add ~name (Fun { callable = name; call }) !env;
   (* We add the function to the closure for recursion *)
-  closure := Environment.add ~name (Fun { name; call }) !closure
+  closure := Environment.add ~name (Fun { callable = name; call }) !closure
+
+and interpret_class_decl name = env := Environment.add ~name (Class name) !env
 
 let interpret = List.iter interpret_decl

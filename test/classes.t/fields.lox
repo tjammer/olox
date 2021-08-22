@@ -1,0 +1,16 @@
+class Bagel {}
+
+var bagel = Bagel();
+
+bagel.icing = "too sweet";
+print bagel.icing;
+
+bagel.other = 12;
+print bagel.other;
+
+// change field
+bagel.icing = 42;
+print bagel.icing;
+
+// try to set field of something elso
+Bagel.icing = "too sweet";
