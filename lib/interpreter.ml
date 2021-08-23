@@ -31,7 +31,7 @@ and interpret_assign name expr =
       env := Environment.replace ~name value !env;
       value
   | Class_get (name, field) -> (
-      match interpret_primary name with
+      match interpret_expr name with
       | Instance (_, inst_env) ->
           let value = interpret_expr expr in
           inst_env := Environment.add ~name:field value !inst_env;
@@ -93,14 +93,25 @@ and interpret_equal left right =
           ^ show_value right))
 
 and interpret_call func args =
-  match interpret_expr (Primary func) with
+  match interpret_expr func with
   | Fun func ->
       (* Arity check happens in the closure *)
       func.call (List.map interpret_expr args)
-  | Class name -> (
+  | Class (name, methods) -> (
       (* We create a class instance *)
       match args with
-      | [] -> Instance (name, ref Environment.empty)
+      | [] ->
+          (* We store the methods as functions in the instance.
+             Otherwise, we'd need to either copy the whole class or
+             store the reference to the class somewhere *)
+          let methods =
+            List.fold_left
+              (fun env f ->
+                env := Environment.add ~name:f.callable (Fun f) !env;
+                env)
+              (ref Environment.empty) methods
+          in
+          Instance (name, methods)
       | _ ->
           raise
             (RuntimeError "Can only create class instance without arguments."))
@@ -108,7 +119,7 @@ and interpret_call func args =
       raise (RuntimeError ("Cannot call " ^ show_value l ^ ". Not a function"))
 
 and interpret_get instance field =
-  match interpret_primary instance with
+  match interpret_expr instance with
   | Instance (name, env) -> (
       match Environment.find ~name:field !env with
       | Some value -> value
@@ -184,8 +195,8 @@ and interpret_decl = function
       env := Environment.add ~name expr !env
   | Stmt s -> ignore (interpret_stmt s)
   | Fun_decl { name; parameters; body } ->
-      interpret_fun_decl name parameters body
-  | Class_decl (name, _) -> interpret_class_decl name
+      ignore (interpret_fun_decl name parameters body)
+  | Class_decl (name, funcs) -> interpret_class_decl name funcs
 
 and interpret_fun_decl name params body =
   let closure = ref !env in
@@ -217,10 +228,18 @@ and interpret_fun_decl name params body =
   in
 
   (* Should use the global scope? We differ from the book here *)
-  env := Environment.add ~name (Fun { callable = name; call }) !env;
+  let func = { callable = name; call } in
+  env := Environment.add ~name (Fun func) !env;
   (* We add the function to the closure for recursion *)
-  closure := Environment.add ~name (Fun { callable = name; call }) !closure
+  closure := Environment.add ~name (Fun func) !closure;
+  func
 
-and interpret_class_decl name = env := Environment.add ~name (Class name) !env
+and interpret_class_decl name funcs =
+  let funcs =
+    List.map
+      (fun func -> interpret_fun_decl func.name func.parameters func.body)
+      funcs
+  in
+  env := Environment.add ~name (Class (name, funcs)) !env
 
 let interpret = List.iter interpret_decl

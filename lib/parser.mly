@@ -122,7 +122,7 @@ assign:
 /* We check in the static analysis step that the expr is a correct lvalue */
 
 call:
-  | primary; Left_paren; separated_list(Comma, expr); Right_paren
+  | expr; Left_paren; separated_list(Comma, expr); Right_paren
     { Call ($1, $3) }
 
 in_chain:
@@ -130,7 +130,7 @@ in_chain:
   | Identifier { $1 }
 
 class_get:
-  | primary; Dot; Identifier   { Class_get ($1, $3) }
+  | expr; Dot; Identifier   { Class_get ($1, $3) }
 
 primary:
   | num = Number { Value (Number num) }

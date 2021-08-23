@@ -10,6 +10,8 @@ print DevonshireCream;
 
 var devonshirecream = DevonshireCream ();
 
+print devonshirecream;
+
 // The field does not exist
 
 print devonshirecream.field;

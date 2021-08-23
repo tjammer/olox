@@ -14,15 +14,21 @@ type binop =
 
 type logicop = And | Or [@@deriving show]
 
-type value =
+type callable = { callable : string; call : value list -> value }
+
+and value =
   | Number of float
   | String of string
   | Identifier of string
   | Bool of bool
   | Nil
-  | Fun of { callable : string; call : value list -> value }
-  | Class of string
-  | Instance of (string * (value Environment.t ref[@opaque]))
+  | Fun of callable
+  | Class of
+      ((string * callable list)
+      [@printer fun fmt (s, _) -> Format.pp_print_string fmt ("\"" ^ s ^ "\"")])
+  | Instance of
+      ((string * value Environment.t ref)
+      [@printer fun fmt (s, _) -> Format.pp_print_string fmt ("\"" ^ s ^ "\"")])
 (* We make the env opaque to since we don't really care about the content *)
 (* The env is a reference to make it easier to set values *)
 (* TODO use with_path = false *)
@@ -36,8 +42,8 @@ and expr =
   | Binary of { left : expr; op : binop; right : expr }
   | Assign of expr * expr
   | Logical of logicop * expr * expr
-  | Call of primary * expr list
-  | Class_get of primary * string
+  | Call of expr * expr list
+  | Class_get of expr * string
 
 and statement =
   | Expr of expr
@@ -68,12 +74,8 @@ let rec show_expr = function
       parenthesize [ show_logicop op; show_expr left; show_expr right ]
   | Call (func, parameters) ->
       parenthesize
-        [
-          show_expr (Primary func);
-          List.map show_expr parameters |> String.concat ", ";
-        ]
-  | Class_get (primary, field) ->
-      parenthesize [ "get"; show_primary primary; field ]
+        [ show_expr func; List.map show_expr parameters |> String.concat ", " ]
+  | Class_get (expr, field) -> parenthesize [ "get"; show_expr expr; field ]
 (* | Class_set (path, value) ->
  *     parenthesize [ show_expr (Class_get path); show_expr value ] *)
 
@@ -82,6 +84,6 @@ exception Error
 let make_lvalue = function
   | Primary (Value (Identifier id)) -> id
   | Class_get (instance, field) ->
-      Printf.printf "%s, %s\n%!" (show_primary instance) field;
+      Printf.printf "%s, %s\n%!" (show_expr instance) field;
       "nil"
   | _ -> raise Error

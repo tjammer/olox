@@ -55,7 +55,7 @@ and resolve_decl data = function
   | Fun_decl { name; parameters; body } ->
       resolve_fun_decl data name parameters body
   | Stmt stmt -> resolve_stmt data stmt
-  | Class_decl (name, _) -> resolve_class_decl data name
+  | Class_decl (name, funcs) -> resolve_class_decl data name funcs
 
 and resolve_var_decl data name expr =
   declare data name
@@ -67,7 +67,11 @@ and resolve_fun_decl data name parameters body =
   let data = declare data name |> define name in
   resolve_fun data parameters body
 
-and resolve_class_decl data name = declare data name |> define name
+and resolve_class_decl data name funcs =
+  declare data name |> define name
+  |> List.fold_left (fun data func ->
+         resolve_fun data func.parameters func.body)
+     %. funcs
 
 and resolve_fun data parameters body =
   begin_scope ~in_func:true data
@@ -115,10 +119,10 @@ and resolve_expr data = function
   | Binary bin -> resolve_expr data bin.left |> resolve_expr %. bin.right
   | Logical (_, left, right) -> resolve_expr data left |> resolve_expr %. right
   | Call (name, exprs) ->
-      resolve_primary data name |> List.fold_left resolve_expr %. exprs
+      resolve_expr data name |> List.fold_left resolve_expr %. exprs
   | Class_get (instance, _) ->
       (* We don't resolve the field, b/c we want to be able to dynamically add data *)
-      resolve_primary data instance
+      resolve_expr data instance
 
 and resolve_primary data = function
   | Value lit -> resolve_value data lit
@@ -148,7 +152,7 @@ and resolve_assign_target data = function
   | Primary (Value (Identifier name)) ->
       resolve name data;
       data
-  | Class_get (instance, _) -> resolve_primary data instance
+  | Class_get (instance, _) -> resolve_expr data instance
   | expr ->
       raise
         (StaticError
