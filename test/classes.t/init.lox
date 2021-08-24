@@ -1,0 +1,18 @@
+class Foo {
+  init(a) {
+    print a;
+  }
+}
+
+var foo = Foo("init");
+print foo.init("directly");
+
+print Foo(10);
+
+class ReturnInInit {
+  init() {
+    return;
+  }
+}
+
+print ReturnInInit();

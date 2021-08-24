@@ -31,3 +31,19 @@ Bound methods and 'this'
   $ dune exec -- olox outside_class_this.lox
   Fatal error: exception Olox__Static_analysis.StaticError("Can't use 'this' outside of a class")
   [2]
+
+Initializers
+
+  $ dune exec -- olox init.lox
+  (Ast.String "init")
+  (Ast.String "directly")
+  (Ast.Instance "Foo")
+  (Ast.Number 10.)
+  (Ast.Instance "Foo")
+  (Ast.Instance "ReturnInInit")
+
+Return with expression in initializer
+
+  $ dune exec -- olox return_from_init.lox
+  Fatal error: exception Olox__Static_analysis.StaticError("Can't return a value from an initializer")
+  [2]

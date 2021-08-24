@@ -9,7 +9,9 @@ exception StaticError of string
 
 type symbol = { defined : bool; used : bool }
 
-type env_state = { def : symbol SymbolTbl.t; in_func : bool; in_class : bool }
+type env_kind = Outside | In_func | In_method | In_init
+
+type env_state = { def : symbol SymbolTbl.t; kind : env_kind }
 
 type t = env_state list
 
@@ -19,26 +21,33 @@ let create () =
    * In contrast to jlox, we resolve all symbols here,
    * including globals *)
   SymbolTbl.add globals "clock" { defined = true; used = true };
-  let in_func = false in
-  let in_class = false in
-  [ { def = globals; in_func; in_class } ]
+  [ { def = globals; kind = Outside } ]
 
 let ( %. ) = Fun.flip
 
 let empty_scope () = failwith "Internal_error: Empty scope stack"
 
-let rec toplevel_return = function
-  | scope :: _ when scope.in_func -> ()
-  | [] -> raise (StaticError "Can't return from toplevel code")
-  | _ :: scopes -> toplevel_return scopes
+let rec toplevel_return ~expr ?(inside = false) = function
+  | scope :: scopes -> (
+      match scope.kind with
+      | In_init when expr ->
+          raise (StaticError "Can't return a value from an initializer")
+      | In_func | In_method | In_init ->
+          toplevel_return ~expr ~inside:true scopes
+      | Outside -> toplevel_return ~expr ~inside scopes)
+  | [] ->
+      if inside then ()
+      else raise (StaticError "Can't return from toplevel code")
 
 let rec outside_class_this = function
-  | scope :: _ when scope.in_class -> ()
+  | scope :: scopes -> (
+      match scope.kind with
+      | In_method | In_init -> ()
+      | In_func | Outside -> outside_class_this scopes)
   | [] -> raise (StaticError "Can't use 'this' outside of a class")
-  | _ :: scopes -> outside_class_this scopes
 
-let begin_scope ?(in_func = false) ?(in_class = false) data =
-  { def = SymbolTbl.create 4; in_func; in_class } :: data
+let begin_scope ?(kind = Outside) data =
+  { def = SymbolTbl.create 4; kind } :: data
 
 let end_scope = function
   | [] -> empty_scope ()
@@ -74,14 +83,17 @@ and resolve_fun_decl data name parameters body =
   resolve_fun data parameters body
 
 and resolve_class_decl data name funcs =
-  declare data name |> define name |> begin_scope ~in_class:true
+  declare data name |> define name
+  |> begin_scope ~kind:In_method
   |> List.fold_left (fun data func ->
-         resolve_fun data func.parameters func.body)
+         if String.(func.name = "init") then
+           resolve_fun ~kind:In_init data func.parameters func.body
+         else resolve_fun data func.parameters func.body)
      %. funcs
   |> end_scope
 
-and resolve_fun data parameters body =
-  begin_scope ~in_func:true data
+and resolve_fun ?(kind = In_func) data parameters body =
+  begin_scope ~kind data
   |> List.fold_left (fun data name -> declare data name |> define name)
      %. parameters
   |> resolve_stmt %. body |> end_scope
@@ -94,10 +106,10 @@ and resolve_stmt data = function
       match else' with Some stmt -> resolve_stmt data stmt | None -> data)
   | Print expr -> resolve_expr data expr
   | Return None ->
-      toplevel_return data;
+      toplevel_return ~expr:false data;
       data
   | Return (Some expr) ->
-      toplevel_return data;
+      toplevel_return ~expr:true data;
       resolve_expr data expr
   | While (expr, stmt) -> resolve_expr data expr |> resolve_stmt %. stmt
 
@@ -153,9 +165,9 @@ and resolve_value data = function
   | This ->
       outside_class_this data;
       data
-  | Class _ -> data
-  | Instance _ -> data
-  | Number _ | String _ | Bool _ | Nil | Fun _ | Method _ -> data
+  | Method _ | Class _ | Instance _ | Number _ | String _ | Bool _ | Nil | Fun _
+    ->
+      data
 
 and resolve_assign_target data = function
   (* So far, we only allow plain identifiers *)

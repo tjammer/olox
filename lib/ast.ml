@@ -16,7 +16,7 @@ type logicop = And | Or [@@deriving show]
 
 type callable = { callable : string; call : value list -> value }
 
-and method' =  (value option -> callable)
+and method' = value option -> callable
 
 and value =
   | Number of float

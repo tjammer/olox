@@ -5,6 +5,12 @@ exception RuntimeError of string
 
 let env = ref Globals.globals
 
+let rec find_init = function
+  | [] -> None
+  | (name, meth) :: methods ->
+      if String.(name = "init") then Some meth else find_init methods
+(* To find the init method for instance construction *)
+
 let rec interpret_expr = function
   (* Since olox is in imperative language, an expression can update the env
    * as a side effect. We use a ref for that *)
@@ -91,6 +97,7 @@ and interpret_equal left right =
   | String l, String r -> Bool (String.equal l r)
   | Number l, Number r -> Bool (Float.equal l r)
   | Nil, Nil -> Bool true
+  | _, Nil | Nil, _ -> Bool false
   | _ ->
       raise
         (RuntimeError
@@ -98,28 +105,29 @@ and interpret_equal left right =
           ^ show_value right))
 
 and interpret_call func args =
+  (* Arity check happens in the closure *)
   match interpret_expr func with
-  | Fun func ->
-      (* Arity check happens in the closure *)
-      func.call (List.map interpret_expr args)
+  | Fun func -> func.call (List.map interpret_expr args)
   | Class (name, methods) -> (
       (* We create a class instance *)
-      match args with
-      | [] ->
-          (* We store the methods as functions in the instance.
-             Otherwise, we'd need to either copy the whole class or
-             store the reference to the class somewhere *)
-          let methods =
-            List.fold_left
-              (fun env (name, f) ->
-                env := Environment.add ~name (Method f) !env;
-                env)
-              (ref Environment.empty) methods
-          in
-          Instance (name, methods)
-      | _ ->
-          raise
-            (RuntimeError "Can only create class instance without arguments."))
+      let instance =
+        (* We store the methods as functions in the instance.
+           Otherwise, we'd need to either copy the whole class or
+           store the reference to the class somewhere *)
+        let methods =
+          List.fold_left
+            (fun env (name, f) ->
+              env := Environment.add ~name (Method f) !env;
+              env)
+            (ref Environment.empty) methods
+        in
+        Instance (name, methods)
+      in
+      match find_init methods with
+      | Some init ->
+          ignore ((init (Some instance)).call (List.map interpret_expr args));
+          instance
+      | None -> instance)
   | l ->
       raise (RuntimeError ("Cannot call " ^ show_value l ^ ". Not a function"))
 
@@ -127,7 +135,20 @@ and interpret_get instance field =
   match interpret_expr instance with
   | Instance (name, env) as i -> (
       match Environment.find ~name:field !env with
-      | Some (Method m) -> Fun (m (Some i))
+      | Some (Method m) ->
+          let f = m (Some i) in
+          (* If the method is 'init' it's an initializer.
+           * In that case, we return the instance *)
+          if String.(f.callable = "init") then
+            Fun
+              {
+                f with
+                call =
+                  (fun params ->
+                    ignore (f.call params);
+                    i);
+              }
+          else Fun f
       | Some value -> value
       | None ->
           raise (RuntimeError ("Undefined property on " ^ name ^ ": " ^ field)))
@@ -202,7 +223,9 @@ and interpret_decl = function
   | Stmt s -> ignore (interpret_stmt s)
   | Fun_decl { name; parameters; body } ->
       (* None in the following call means: Do not bind anything to 'this' *)
-      ignore (interpret_method name parameters body None)
+      ignore
+        (let f, _ = interpret_method name parameters body in
+         f None)
   | Class_decl (name, funcs) -> interpret_class_decl name funcs
 
 and interpret_method name params body =
@@ -242,22 +265,29 @@ and interpret_method name params body =
       match ret with Some ret -> ret | None -> Nil
     in
 
-    (* Should use the global scope? We differ from the book here *)
     let func = { callable = name; call } in
+    (* Restore the global environment *)
     env := Environment.add ~name (Fun func) !env;
     (* We add the function to the closure for recursion *)
     closure := Environment.add ~name (Fun func) !closure;
     func
   in
-  ret
+  (* We return the closure to add the Class to it *)
+  (ret, closure)
 
 and interpret_class_decl name funcs =
-  let funcs =
+  let funcs, closures =
     List.map
       (fun func ->
-        (func.name, interpret_method func.name func.parameters func.body))
+        let f, closure = interpret_method func.name func.parameters func.body in
+        ((func.name, f), closure))
       funcs
+    |> List.split
   in
+  List.iter
+    (fun closure ->
+      closure := Environment.add ~name (Class (name, funcs)) !closure)
+    closures;
   env := Environment.add ~name (Class (name, funcs)) !env
 
 let interpret = List.iter interpret_decl
