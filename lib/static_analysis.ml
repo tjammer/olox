@@ -9,7 +9,7 @@ exception StaticError of string
 
 type symbol = { defined : bool; used : bool }
 
-type env_state = { def : symbol SymbolTbl.t; in_func : bool }
+type env_state = { def : symbol SymbolTbl.t; in_func : bool; in_class : bool }
 
 type t = env_state list
 
@@ -20,7 +20,8 @@ let create () =
    * including globals *)
   SymbolTbl.add globals "clock" { defined = true; used = true };
   let in_func = false in
-  [ { def = globals; in_func } ]
+  let in_class = false in
+  [ { def = globals; in_func; in_class } ]
 
 let ( %. ) = Fun.flip
 
@@ -31,8 +32,13 @@ let rec toplevel_return = function
   | [] -> raise (StaticError "Can't return from toplevel code")
   | _ :: scopes -> toplevel_return scopes
 
-let begin_scope ?(in_func = false) data =
-  { def = SymbolTbl.create 4; in_func } :: data
+let rec outside_class_this = function
+  | scope :: _ when scope.in_class -> ()
+  | [] -> raise (StaticError "Can't use 'this' outside of a class")
+  | _ :: scopes -> outside_class_this scopes
+
+let begin_scope ?(in_func = false) ?(in_class = false) data =
+  { def = SymbolTbl.create 4; in_func; in_class } :: data
 
 let end_scope = function
   | [] -> empty_scope ()
@@ -68,10 +74,11 @@ and resolve_fun_decl data name parameters body =
   resolve_fun data parameters body
 
 and resolve_class_decl data name funcs =
-  declare data name |> define name
+  declare data name |> define name |> begin_scope ~in_class:true
   |> List.fold_left (fun data func ->
          resolve_fun data func.parameters func.body)
      %. funcs
+  |> end_scope
 
 and resolve_fun data parameters body =
   begin_scope ~in_func:true data
@@ -143,7 +150,9 @@ and resolve_value data = function
               resolve name data;
 
               data))
-  | This -> data (* TODO make sure we are in a class*)
+  | This ->
+      outside_class_this data;
+      data
   | Class _ -> data
   | Instance _ -> data
   | Number _ | String _ | Bool _ | Nil | Fun _ | Method _ -> data

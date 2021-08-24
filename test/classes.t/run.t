@@ -25,3 +25,9 @@ Bound methods and 'this'
   (Ast.String "Jane")
   (Ast.Instance "Egotist")
   (Ast.String "The German chocolate cake is delicious!")
+
+'This' outside class is not allowed
+
+  $ dune exec -- olox outside_class_this.lox
+  Fatal error: exception Olox__Static_analysis.StaticError("Can't use 'this' outside of a class")
+  [2]
