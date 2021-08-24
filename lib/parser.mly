@@ -140,4 +140,5 @@ primary:
   | Nil { Value Nil }
   | id =  Identifier { Value (Identifier id) }
   | Left_paren; e = expr; Right_paren { Grouping e }
+  | This { Value This }
 ;

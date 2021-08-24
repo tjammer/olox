@@ -125,7 +125,7 @@ and resolve_expr data = function
       resolve_expr data instance
 
 and resolve_primary data = function
-  | Value lit -> resolve_value data lit
+  | Value value -> resolve_value data value
   | Grouping expr -> resolve_expr data expr
 
 and resolve_value data = function
@@ -143,9 +143,10 @@ and resolve_value data = function
               resolve name data;
 
               data))
+  | This -> data (* TODO make sure we are in a class*)
   | Class _ -> data
   | Instance _ -> data
-  | Number _ | String _ | Bool _ | Nil | Fun _ -> data
+  | Number _ | String _ | Bool _ | Nil | Fun _ | Method _ -> data
 
 and resolve_assign_target data = function
   (* So far, we only allow plain identifiers *)

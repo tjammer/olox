@@ -18,3 +18,10 @@ Call methods
   $ dune exec -- olox methods.lox
   (Ast.String "Crunch crunch crunch!")
   (Ast.String "Crunch crunch crunch!")
+
+Bound methods and 'this'
+
+  $ dune exec -- olox this_bound_methods.lox
+  (Ast.String "Jane")
+  (Ast.Instance "Egotist")
+  (Ast.String "The German chocolate cake is delicious!")

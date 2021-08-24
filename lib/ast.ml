@@ -16,6 +16,8 @@ type logicop = And | Or [@@deriving show]
 
 type callable = { callable : string; call : value list -> value }
 
+and method' =  (value option -> callable)
+
 and value =
   | Number of float
   | String of string
@@ -23,15 +25,17 @@ and value =
   | Bool of bool
   | Nil
   | Fun of callable
+  | Method of method'
   | Class of
-      ((string * callable list)
+      ((string * (string * method') list)
       [@printer fun fmt (s, _) -> Format.pp_print_string fmt ("\"" ^ s ^ "\"")])
   | Instance of
       ((string * value Environment.t ref)
       [@printer fun fmt (s, _) -> Format.pp_print_string fmt ("\"" ^ s ^ "\"")])
-(* We make the env opaque to since we don't really care about the content *)
-(* The env is a reference to make it easier to set values *)
-(* TODO use with_path = false *)
+  (* We make the env opaque to since we don't really care about the content *)
+  (* The env is a reference to make it easier to set values *)
+  (* TODO use with_path = false *)
+  | This
 [@@deriving show]
 
 and primary = Value of value | Grouping of expr

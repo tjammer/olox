@@ -19,9 +19,14 @@ let rec interpret_expr = function
 and interpret_primary = function
   | Value (Identifier name) -> (
       match Environment.find ~name !env with
-      | Some l -> l
+      | Some v -> v
       | None -> raise (RuntimeError ("Cannot find variable '" ^ name ^ "'")))
-  | Value l -> l
+  | Value This -> (
+      let name = "this" in
+      match Environment.find ~name !env with
+      | Some v -> v
+      | None -> raise (RuntimeError ("Cannot find variable '" ^ name ^ "'")))
+  | Value v -> v
   | Grouping e -> interpret_expr e
 
 and interpret_assign name expr =
@@ -106,8 +111,8 @@ and interpret_call func args =
              store the reference to the class somewhere *)
           let methods =
             List.fold_left
-              (fun env f ->
-                env := Environment.add ~name:f.callable (Fun f) !env;
+              (fun env (name, f) ->
+                env := Environment.add ~name (Method f) !env;
                 env)
               (ref Environment.empty) methods
           in
@@ -120,8 +125,9 @@ and interpret_call func args =
 
 and interpret_get instance field =
   match interpret_expr instance with
-  | Instance (name, env) -> (
+  | Instance (name, env) as i -> (
       match Environment.find ~name:field !env with
+      | Some (Method m) -> Fun (m (Some i))
       | Some value -> value
       | None ->
           raise (RuntimeError ("Undefined property on " ^ name ^ ": " ^ field)))
@@ -195,49 +201,61 @@ and interpret_decl = function
       env := Environment.add ~name expr !env
   | Stmt s -> ignore (interpret_stmt s)
   | Fun_decl { name; parameters; body } ->
-      ignore (interpret_fun_decl name parameters body)
+      (* None in the following call means: Do not bind anything to 'this' *)
+      ignore (interpret_method name parameters body None)
   | Class_decl (name, funcs) -> interpret_class_decl name funcs
 
-and interpret_fun_decl name params body =
+and interpret_method name params body =
+  (* Here, method is a function which takes a instance option and returns a
+     callable. For normal function, we simply don't pass an instance.
+     For class methods, the instance we pass is bound to 'this' *)
   let closure = ref !env in
 
-  let call arguments =
-    (* We create a new block with the parameter bindings.
-     * This is not really correct, but good enough for now *)
-    let saved_env = !env in
-    env := Environment.open_block !closure;
+  let ret instance =
+    let call arguments =
+      (* We create a new block with the parameter bindings.
+       * This is not really correct, but good enough for now *)
+      let saved_env = !env in
+      env := Environment.open_block !closure;
+      (* Here, we bind 'this' to the class instance *)
+      (match instance with
+      | Some instance -> env := Environment.add ~name:"this" instance !env
+      | None -> ());
 
-    (try
-       List.iter2
-         (fun name argument -> env := Environment.add ~name argument !env)
-         params arguments
-     with Invalid_argument _ ->
-       raise
-         (RuntimeError
-            ("Wrong arity: Expected "
-            ^ (List.length params |> string_of_int)
-            ^ " arguments")));
+      (try
+         List.iter2
+           (fun name argument -> env := Environment.add ~name argument !env)
+           params arguments
+       with Invalid_argument _ ->
+         raise
+           (RuntimeError
+              ("Wrong arity: Expected "
+              ^ (List.length params |> string_of_int)
+              ^ " arguments")));
 
-    let ret = interpret_stmt body in
+      let ret = interpret_stmt body in
 
-    (* Save the changes done to the closere environment *)
-    closure := Environment.close_block !env;
-    env := saved_env;
+      (* Save the changes done to the closere environment *)
+      closure := Environment.close_block !env;
+      env := saved_env;
 
-    match ret with Some ret -> ret | None -> Nil
+      match ret with Some ret -> ret | None -> Nil
+    in
+
+    (* Should use the global scope? We differ from the book here *)
+    let func = { callable = name; call } in
+    env := Environment.add ~name (Fun func) !env;
+    (* We add the function to the closure for recursion *)
+    closure := Environment.add ~name (Fun func) !closure;
+    func
   in
-
-  (* Should use the global scope? We differ from the book here *)
-  let func = { callable = name; call } in
-  env := Environment.add ~name (Fun func) !env;
-  (* We add the function to the closure for recursion *)
-  closure := Environment.add ~name (Fun func) !closure;
-  func
+  ret
 
 and interpret_class_decl name funcs =
   let funcs =
     List.map
-      (fun func -> interpret_fun_decl func.name func.parameters func.body)
+      (fun func ->
+        (func.name, interpret_method func.name func.parameters func.body))
       funcs
   in
   env := Environment.add ~name (Class (name, funcs)) !env
