@@ -13,6 +13,6 @@ let globals =
   in
   [
     StrMap.add "clock"
-      (Ast.Fun { callable = "clock"; call = clock })
+      (ref (Ast.Fun { callable = "clock"; call = clock }))
       StrMap.empty;
   ]

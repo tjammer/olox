@@ -25,12 +25,12 @@ let rec interpret_expr = function
 and interpret_primary = function
   | Value (Identifier name) -> (
       match Environment.find ~name !env with
-      | Some v -> v
+      | Some v -> !v
       | None -> raise (RuntimeError ("Cannot find variable '" ^ name ^ "'")))
   | Value This -> (
       let name = "this" in
       match Environment.find ~name !env with
-      | Some v -> v
+      | Some v -> !v
       | None -> raise (RuntimeError ("Cannot find variable '" ^ name ^ "'")))
   | Value v -> v
   | Grouping e -> interpret_expr e
@@ -39,7 +39,10 @@ and interpret_assign name expr =
   match name with
   | Primary (Value (Identifier name)) ->
       let value = interpret_expr expr in
-      env := Environment.replace ~name value !env;
+      (* env := Environment.replace ~name value !env; *)
+      (match Environment.find ~name !env with
+      | Some v -> v := value
+      | None -> failwith "TODO");
       value
   | Class_get (name, field) -> (
       match interpret_expr name with
@@ -219,7 +222,7 @@ and interpret_decl = function
       let expr =
         match expr with Some expr -> interpret_expr expr | None -> Nil
       in
-      env := Environment.add ~name expr !env
+      env := Environment.add ~name (ref expr) !env
   | Stmt s -> ignore (interpret_stmt s)
   | Fun_decl { name; parameters; body } ->
       (* None in the following call means: Do not bind anything to 'this' *)
@@ -242,12 +245,13 @@ and interpret_method name params body =
       env := Environment.open_block !closure;
       (* Here, we bind 'this' to the class instance *)
       (match instance with
-      | Some instance -> env := Environment.add ~name:"this" instance !env
+      | Some instance -> env := Environment.add ~name:"this" (ref instance) !env
       | None -> ());
 
       (try
          List.iter2
-           (fun name argument -> env := Environment.add ~name argument !env)
+           (fun name argument ->
+             env := Environment.add ~name (ref argument) !env)
            params arguments
        with Invalid_argument _ ->
          raise
@@ -267,9 +271,9 @@ and interpret_method name params body =
 
     let func = { callable = name; call } in
     (* Restore the global environment *)
-    env := Environment.add ~name (Fun func) !env;
+    env := Environment.add ~name (ref (Fun func)) !env;
     (* We add the function to the closure for recursion *)
-    closure := Environment.add ~name (Fun func) !closure;
+    closure := Environment.add ~name (ref (Fun func)) !closure;
     func
   in
   (* We return the closure to add the Class to it *)
@@ -286,8 +290,8 @@ and interpret_class_decl name funcs =
   in
   List.iter
     (fun closure ->
-      closure := Environment.add ~name (Class (name, funcs)) !closure)
+      closure := Environment.add ~name (ref (Class (name, funcs))) !closure)
     closures;
-  env := Environment.add ~name (Class (name, funcs)) !env
+  env := Environment.add ~name (ref (Class (name, funcs))) !env
 
 let interpret = List.iter interpret_decl
