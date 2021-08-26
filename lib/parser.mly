@@ -49,10 +49,10 @@
 %nonassoc Less_equal
 %nonassoc Less
 %nonassoc Greater
+%left Minus
 %left Plus
 %left Star
 
-%nonassoc Minus
 %nonassoc Bang
 %nonassoc Number
 

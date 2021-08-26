@@ -39,3 +39,18 @@ Test if statements and their nesting
   (Number 2584.)
   (Number 4181.)
   (Number 6765.)
+
+  $ dune exec -- olox precedence.lox
+  (Number 14.)
+  (Number 8.)
+  (Number 4.)
+  (Number 0.)
+  (Bool true)
+  (Bool true)
+  (Bool true)
+  (Bool true)
+  (Number 0.)
+  (Number 0.)
+  (Number 0.)
+  (Number 0.)
+  (Number 4.)
