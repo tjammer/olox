@@ -18,6 +18,12 @@ type callable = { callable : string; call : value list -> value }
 
 and method' = value option -> callable
 
+and class' = {
+  cl_name : string;
+  methods : (string * method') list;
+  super : class' option;
+}
+
 and value =
   | Number of float
   | String of string
@@ -27,15 +33,15 @@ and value =
   | Fun of callable
   | Method of method'
   | Class of
-      ((string * (string * method') list)
-      [@printer fun fmt (s, _) -> Format.pp_print_string fmt ("\"" ^ s ^ "\"")])
+      (class'[@printer fun fmt c -> Format.fprintf fmt "\"%s\"" c.cl_name])
   | Instance of
-      ((string * value Environment.t ref)
-      [@printer fun fmt (s, _) -> Format.pp_print_string fmt ("\"" ^ s ^ "\"")])
+      ((string * value Environment.t ref * class')
+      [@printer fun fmt (s, _, _) -> Format.fprintf fmt "\"%s\"" s])
   (* We make the env opaque to since we don't really care about the content *)
   (* The env is a reference to make it easier to set values *)
   (* TODO use with_path = false *)
   | This
+  | Super of string
 [@@deriving show]
 
 and primary = Value of value | Grouping of expr
@@ -61,7 +67,7 @@ and decl =
   | Var_decl of string * expr option
   | Stmt of statement
   | Fun_decl of func
-  | Class_decl of string * func list
+  | Class_decl of string * func list * string option
 
 and func = { name : string; parameters : string list; body : statement }
 

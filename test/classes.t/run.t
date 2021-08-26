@@ -47,3 +47,24 @@ Return with expression in initializer
   $ dune exec -- olox return_from_init.lox
   Fatal error: exception Olox__Static_analysis.StaticError("Can't return a value from an initializer")
   [2]
+
+Tests from reference repo
+
+  $ dune exec -- olox empty.lox
+  (Ast.Class "Foo")
+  $ dune exec -- olox inherit_self.lox
+  Fatal error: exception Olox__Static_analysis.StaticError("A class can't inherit from itself: Foo")
+  [2]
+  $ dune exec -- olox inherited_method.lox
+  (Ast.String "in foo")
+  (Ast.String "in bar")
+  (Ast.String "in baz")
+  $ dune exec -- olox local_inherit_other.lox
+  (Ast.Class "B")
+  $ dune exec -- olox local_inherit_self.lox
+  Fatal error: exception Olox__Static_analysis.StaticError("A class can't inherit from itself: Foo")
+  [2]
+  $ dune exec -- olox local_reference_self.lox
+  (Ast.Class "Foo")
+  $ dune exec -- olox reference_self.lox
+  (Ast.Class "Foo")

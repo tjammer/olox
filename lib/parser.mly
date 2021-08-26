@@ -66,7 +66,11 @@ decl:
   | var = var_decl { var }
   | s = stmt { Stmt s }
   | Fun; func { Fun_decl $2 }
-  | Class; Identifier; Left_brace; list(func); Right_brace; { Class_decl ($2, $4) }
+  | Class; Identifier; option(inheritance); Left_brace; list(func); Right_brace;
+    { Class_decl ($2, $5, $3) }
+
+inheritance:
+  | Less; Identifier { $2 }
 
 var_decl:
   | Var; id = Identifier; Equal; e = expr; Semicolon { Var_decl (id, Some e) }
@@ -141,4 +145,5 @@ primary:
   | id =  Identifier { Value (Identifier id) }
   | Left_paren; e = expr; Right_paren { Grouping e }
   | This { Value This }
+  | Super; Dot; Identifier { Value (Super $3) }
 ;

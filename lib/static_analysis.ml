@@ -9,7 +9,8 @@ exception StaticError of string
 
 type symbol = { defined : bool; used : bool }
 
-type env_kind = Outside | In_func | In_method | In_init
+type env_kind = Outside | In_func | In_method of bool | In_init of bool
+(* The bool is true if inside a subclass *)
 
 type env_state = { def : symbol SymbolTbl.t; kind : env_kind }
 
@@ -30,9 +31,9 @@ let empty_scope () = failwith "Internal_error: Empty scope stack"
 let rec toplevel_return ~expr ?(inside = false) = function
   | scope :: scopes -> (
       match scope.kind with
-      | In_init when expr ->
+      | In_init _ when expr ->
           raise (StaticError "Can't return a value from an initializer")
-      | In_func | In_method | In_init ->
+      | In_func | In_method _ | In_init _ ->
           toplevel_return ~expr ~inside:true scopes
       | Outside -> toplevel_return ~expr ~inside scopes)
   | [] ->
@@ -42,9 +43,17 @@ let rec toplevel_return ~expr ?(inside = false) = function
 let rec outside_class_this = function
   | scope :: scopes -> (
       match scope.kind with
-      | In_method | In_init -> ()
+      | In_method _ | In_init _ -> ()
       | In_func | Outside -> outside_class_this scopes)
   | [] -> raise (StaticError "Can't use 'this' outside of a class")
+
+let rec has_superclass = function
+  | scope :: scopes -> (
+      match scope.kind with
+      | In_method true | In_init true -> ()
+      | In_method false | In_func | In_init false | Outside ->
+          has_superclass scopes)
+  | [] -> raise (StaticError "Can't use 'super' in a non-subclass")
 
 let begin_scope ?(kind = Outside) data =
   { def = SymbolTbl.create 4; kind } :: data
@@ -70,7 +79,8 @@ and resolve_decl data = function
   | Fun_decl { name; parameters; body } ->
       resolve_fun_decl data name parameters body
   | Stmt stmt -> resolve_stmt data stmt
-  | Class_decl (name, funcs) -> resolve_class_decl data name funcs
+  | Class_decl (name, methods, super) ->
+      resolve_class_decl data name methods super
 
 and resolve_var_decl data name expr =
   declare data name
@@ -82,14 +92,31 @@ and resolve_fun_decl data name parameters body =
   let data = declare data name |> define name in
   resolve_fun data parameters body
 
-and resolve_class_decl data name funcs =
-  declare data name |> define name
-  |> begin_scope ~kind:In_method
+and resolve_class_decl data name methods super =
+  let handle_super data =
+    match super with
+    | Some cl ->
+        (* If there is a superclass, we resolve it.
+           We raise if the class tries to inherit from itself *)
+        if String.equal cl name then
+          raise (StaticError ("A class can't inherit from itself: " ^ name));
+        resolve cl data;
+        (In_method true, data)
+    | None -> (In_method false, data)
+  in
+
+  declare data name |> define name |> handle_super |> fun (kind, data) ->
+  begin_scope ~kind data
   |> List.fold_left (fun data func ->
          if String.(func.name = "init") then
-           resolve_fun ~kind:In_init data func.parameters func.body
+           let kind =
+             match (List.hd data).kind with
+             | In_method b | In_init b -> In_init b
+             | _ -> failwith "Internal error: In subclass check"
+           in
+           resolve_fun ~kind data func.parameters func.body
          else resolve_fun data func.parameters func.body)
-     %. funcs
+     %. methods
   |> end_scope
 
 and resolve_fun ?(kind = In_func) data parameters body =
@@ -164,6 +191,9 @@ and resolve_value data = function
               data))
   | This ->
       outside_class_this data;
+      data
+  | Super _ ->
+      has_superclass data;
       data
   | Method _ | Class _ | Instance _ | Number _ | String _ | Bool _ | Nil | Fun _
     ->

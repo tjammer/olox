@@ -42,6 +42,7 @@ rule read =
   | "return" { Return }
   | "class"  { Class }
   | "this"   { This }
+  | "super"  { Super }
   | id       { Identifier (Lexing.lexeme lexbuf) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
   | '('      { Left_paren }

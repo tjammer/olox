@@ -32,8 +32,25 @@ and interpret_primary = function
       match Environment.find ~name !env with
       | Some v -> !v
       | None -> raise (RuntimeError ("Cannot find variable '" ^ name ^ "'")))
+  | Value (Super id) -> interpret_super id
   | Value v -> v
   | Grouping e -> interpret_expr e
+
+and interpret_super id =
+  (* Get the instance to get the superclass *)
+  match Environment.find ~name:"this" !env with
+  | Some ({ contents = Instance (_, _, cl) } as i) -> (
+      match cl.super with
+      | Some cl -> (
+          match class_get_method cl id with
+          | Some meth -> Fun (meth (Some !i))
+          | None ->
+              raise
+                (RuntimeError
+                   (Printf.sprintf "Method %s does not exist on class %s" id
+                      cl.cl_name)))
+      | None -> failwith "Internal error: Should have been caught before")
+  | _ -> failwith "Internal error: super should use instance"
 
 and interpret_assign name expr =
   match name with
@@ -46,7 +63,7 @@ and interpret_assign name expr =
       value
   | Class_get (name, field) -> (
       match interpret_expr name with
-      | Instance (_, inst_env) ->
+      | Instance (_, inst_env, _) ->
           let value = interpret_expr expr in
           inst_env := Environment.add ~name:field value !inst_env;
           value
@@ -111,22 +128,23 @@ and interpret_call func args =
   (* Arity check happens in the closure *)
   match interpret_expr func with
   | Fun func -> func.call (List.map interpret_expr args)
-  | Class (name, methods) -> (
+  | Class c -> (
       (* We create a class instance *)
       let instance =
         (* We store the methods as functions in the instance.
            Otherwise, we'd need to either copy the whole class or
            store the reference to the class somewhere *)
-        let methods =
-          List.fold_left
-            (fun env (name, f) ->
-              env := Environment.add ~name (Method f) !env;
-              env)
-            (ref Environment.empty) methods
-        in
-        Instance (name, methods)
+        (* TODO delete *)
+        (* let methods =
+         *   List.fold_left
+         *     (fun env (name, f) ->
+         *       env := Environment.add ~name (Method f) !env;
+         *       env)
+         *     (ref Environment.empty) c.methods
+         * in *)
+        Instance (c.cl_name, ref Environment.empty, c)
       in
-      match find_init methods with
+      match find_init c.methods with
       | Some init ->
           ignore ((init (Some instance)).call (List.map interpret_expr args));
           instance
@@ -136,26 +154,37 @@ and interpret_call func args =
 
 and interpret_get instance field =
   match interpret_expr instance with
-  | Instance (name, env) as i -> (
+  | Instance (name, env, cl) as i -> (
       match Environment.find ~name:field !env with
-      | Some (Method m) ->
-          let f = m (Some i) in
-          (* If the method is 'init' it's an initializer.
-           * In that case, we return the instance *)
-          if String.(f.callable = "init") then
-            Fun
-              {
-                f with
-                call =
-                  (fun params ->
-                    ignore (f.call params);
-                    i);
-              }
-          else Fun f
       | Some value -> value
-      | None ->
-          raise (RuntimeError ("Undefined property on " ^ name ^ ": " ^ field)))
+      | None -> (
+          match class_get_method cl field with
+          | Some m ->
+              let f = m (Some i) in
+              (* If the method is 'init' it's an initializer.
+               * In that case, we return the instance *)
+              if String.(f.callable = "init") then
+                Fun
+                  {
+                    f with
+                    call =
+                      (fun params ->
+                        ignore (f.call params);
+                        i);
+                  }
+              else Fun f
+          | None ->
+              raise
+                (RuntimeError ("Undefined property on " ^ name ^ ": " ^ field)))
+      )
   | _ -> raise (RuntimeError "Only instances have properties")
+
+and class_get_method cl field =
+  match List.Assoc.get ~eq:String.equal field cl.methods with
+  | Some meth -> Some meth
+  | None -> (
+      (* Look in the superclass if it exists *)
+      match cl.super with Some cl -> class_get_method cl field | None -> None)
 
 let rec interpret_stmt = function
   (* This returns either Some, if we hit a return statement
@@ -229,7 +258,7 @@ and interpret_decl = function
       ignore
         (let f, _ = interpret_method name parameters body in
          f None)
-  | Class_decl (name, funcs) -> interpret_class_decl name funcs
+  | Class_decl (name, funcs, super) -> interpret_class_decl name funcs super
 
 and interpret_method name params body =
   (* Here, method is a function which takes a instance option and returns a
@@ -279,8 +308,8 @@ and interpret_method name params body =
   (* We return the closure to add the Class to it *)
   (ret, closure)
 
-and interpret_class_decl name funcs =
-  let funcs, closures =
+and interpret_class_decl name funcs super =
+  let methods, closures =
     List.map
       (fun func ->
         let f, closure = interpret_method func.name func.parameters func.body in
@@ -288,10 +317,26 @@ and interpret_class_decl name funcs =
       funcs
     |> List.split
   in
+  (* Add the class name itself to the method closure.
+     Allows methods to call the ctor *)
   List.iter
     (fun closure ->
-      closure := Environment.add ~name (ref (Class (name, funcs))) !closure)
+      closure :=
+        Environment.add ~name
+          (ref (Class { cl_name = name; methods; super = None }))
+          !closure)
     closures;
-  env := Environment.add ~name (ref (Class (name, funcs))) !env
+
+  let super =
+    match super with
+    | Some super -> (
+        match interpret_primary (Value (Identifier super)) with
+        | Class cl -> Some cl
+        | _ -> raise (RuntimeError ("Superclass must be a class: " ^ super)))
+    | None -> None
+  in
+
+  env :=
+    Environment.add ~name (ref (Class { cl_name = name; methods; super })) !env
 
 let interpret = List.iter interpret_decl
