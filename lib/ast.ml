@@ -39,10 +39,9 @@ and value =
       [@printer fun fmt (s, _, _) -> Format.fprintf fmt "\"%s\"" s])
   (* We make the env opaque to since we don't really care about the content *)
   (* The env is a reference to make it easier to set values *)
-  (* TODO use with_path = false *)
   | This
   | Super of string
-[@@deriving show]
+[@@deriving show { with_path = false }]
 
 and primary = Value of value | Grouping of expr
 
@@ -86,8 +85,6 @@ let rec show_expr = function
       parenthesize
         [ show_expr func; List.map show_expr parameters |> String.concat ", " ]
   | Class_get (expr, field) -> parenthesize [ "get"; show_expr expr; field ]
-(* | Class_set (path, value) ->
- *     parenthesize [ show_expr (Class_get path); show_expr value ] *)
 
 exception Error
 

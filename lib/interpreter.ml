@@ -56,10 +56,10 @@ and interpret_assign name expr =
   match name with
   | Primary (Value (Identifier name)) ->
       let value = interpret_expr expr in
-      (* env := Environment.replace ~name value !env; *)
       (match Environment.find ~name !env with
       | Some v -> v := value
-      | None -> failwith "TODO");
+      | None ->
+          failwith "Internal error: Assign target not caught in static_analysis");
       value
   | Class_get (name, field) -> (
       match interpret_expr name with
@@ -134,14 +134,6 @@ and interpret_call func args =
         (* We store the methods as functions in the instance.
            Otherwise, we'd need to either copy the whole class or
            store the reference to the class somewhere *)
-        (* TODO delete *)
-        (* let methods =
-         *   List.fold_left
-         *     (fun env (name, f) ->
-         *       env := Environment.add ~name (Method f) !env;
-         *       env)
-         *     (ref Environment.empty) c.methods
-         * in *)
         Instance (c.cl_name, ref Environment.empty, c)
       in
       match find_init c.methods with
