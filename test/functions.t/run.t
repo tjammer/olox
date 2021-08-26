@@ -54,7 +54,7 @@ The function should not see variables which are declared in the future
   (String "global")
   (String "global")
 
-From reference repo tests
+Closure tests from reference repo
   $ dune exec -- olox assign_to_closure.lox
   (String "local")
   (String "after f")
@@ -87,3 +87,46 @@ From reference repo tests
   (String "closure")
   (String "shadow")
   (String "closure")
+
+Function tests from reference repo
+
+  $ dune exec -- olox body_must_be_block.lox
+  :3:12: syntax error
+  $ dune exec -- olox empty_body.lox
+  Nil
+  $ dune exec -- olox extra_arguments.lox
+  RuntimeError: Wrong arity: Expected 2 arguments
+  $ dune exec -- olox local_mutual_recursion.lox
+  StaticError: Variable 'isOdd' does not exist
+  $ dune exec -- olox local_recursion.lox
+  (Number 21.)
+  $ dune exec -- olox missing_arguments.lox
+  RuntimeError: Wrong arity: Expected 2 arguments
+  $ dune exec -- olox missing_comma_in_parameters.lox
+  :3:15: syntax error
+  $ dune exec -- olox mutual_recursion.lox
+  (Bool true)
+  (Bool true)
+  $ dune exec -- olox nested_call_with_arguments.lox
+  (String "hello world")
+  $ dune exec -- olox parameters.lox
+  (Number 0.)
+  (Number 1.)
+  (Number 3.)
+  (Number 6.)
+  (Number 10.)
+  (Number 15.)
+  (Number 21.)
+  (Number 28.)
+  (Number 36.)
+  $ dune exec -- olox print.lox
+  (Fun { callable = "foo"; call = <fun> })
+  (Fun { callable = "clock"; call = <fun> })
+  $ dune exec -- olox recursion.lox
+  (Number 21.)
+  $ dune exec -- olox too_many_arguments.lox
+  Fatal error: exception Sys_error("too_many_arguments.lox: No such file or directory")
+  [2]
+  $ dune exec -- olox too_many_parameters.lox
+  Fatal error: exception Sys_error("too_many_parameters.lox: No such file or directory")
+  [2]

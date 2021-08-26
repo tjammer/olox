@@ -1,0 +1,12 @@
+fun isEven(n, isOdd) {
+  if (n == 0) return true;
+  return isOdd(n - 1, isEven);
+}
+
+fun isOdd(n, isEven) {
+  if (n == 0) return false;
+  return isEven(n - 1, isOdd);
+}
+
+print isEven(4, isOdd); // expect: true
+print isOdd(3, isEven); // expect: true
